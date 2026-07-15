@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/editor/Editor.tsx","./src/editor/generatedMarks.ts","./src/editor/setup.ts","./src/editor/stream.test.ts","./src/editor/stream.ts"],"version":"5.9.3"}
+{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/editor/Editor.tsx","./src/editor/generatedMarks.ts","./src/editor/setup.ts","./src/editor/stream.test.ts","./src/editor/stream.ts","./src/gen/client.ts","./src/gen/sse.test.ts","./src/gen/sse.ts"],"version":"5.9.3"}
