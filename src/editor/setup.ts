@@ -57,7 +57,10 @@ const proseTheme = EditorView.theme({
   },
 });
 
-export function baseExtensions(extra: Extension[] = []): Extension[] {
+export function baseExtensions(
+  extra: Extension[] = [],
+  initialMarks: Array<[number, number]> = [],
+): Extension[] {
   return [
     EditorView.lineWrapping,
     genKeymap,
@@ -67,7 +70,7 @@ export function baseExtensions(extra: Extension[] = []): Extension[] {
     placeholder("Start writing…"),
     proseTheme,
     streamState,
-    generatedMarksExtension,
+    generatedMarksExtension(initialMarks),
     ...extra,
   ];
 }

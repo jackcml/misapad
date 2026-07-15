@@ -5,11 +5,17 @@ import { baseExtensions } from "./setup";
 
 interface EditorProps {
   initialDoc: string;
+  initialMarks?: Array<[number, number]>;
   extensions?: Extension[];
   onViewReady: (view: EditorView) => void;
 }
 
-export default function Editor({ initialDoc, extensions = [], onViewReady }: EditorProps) {
+export default function Editor({
+  initialDoc,
+  initialMarks = [],
+  extensions = [],
+  onViewReady,
+}: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -17,7 +23,7 @@ export default function Editor({ initialDoc, extensions = [], onViewReady }: Edi
     const view = new EditorView({
       state: EditorState.create({
         doc: initialDoc,
-        extensions: baseExtensions(extensions),
+        extensions: baseExtensions(extensions, initialMarks),
       }),
       parent: containerRef.current!,
     });

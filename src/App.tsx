@@ -3,14 +3,20 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import Editor from "./editor/Editor";
 import { baseExtensions } from "./editor/setup";
+import { serializeGeneratedRanges } from "./editor/generatedMarks";
 import TopBar from "./ui/TopBar";
 import SettingsPanel from "./ui/SettingsPanel";
 import InlinePopup from "./ui/InlinePopup";
 import SessionPicker from "./ui/SessionPicker";
-import { flushAutosave, getSessions, loadDoc, scheduleAutosave } from "./state/sessions";
+import { flushAutosave, getSessions, loadDoc, loadMarks, scheduleAutosave } from "./state/sessions";
 
 const autosaveExtension = EditorView.updateListener.of((update) => {
-  if (update.docChanged) scheduleAutosave(() => update.view.state.doc.toString());
+  if (update.docChanged) {
+    scheduleAutosave(() => ({
+      text: update.view.state.doc.toString(),
+      marks: serializeGeneratedRanges(update.view.state),
+    }));
+  }
 });
 
 export default function App() {
@@ -22,15 +28,16 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", flushAutosave);
   }, []);
 
-  // After a session switch/create/delete: load the new session's doc into a
-  // fresh editor state (fresh undo history too).
+  // After a session switch/create/delete: load the new session's doc and tint
+  // into a fresh editor state (fresh undo history too).
   const handleSessionChange = useCallback(() => {
     const view = viewRef.current;
     if (!view) return;
+    const id = getSessions().currentId;
     view.setState(
       EditorState.create({
-        doc: loadDoc(getSessions().currentId),
-        extensions: baseExtensions([autosaveExtension]),
+        doc: loadDoc(id),
+        extensions: baseExtensions([autosaveExtension], loadMarks(id)),
       }),
     );
     view.focus();
@@ -46,6 +53,7 @@ export default function App() {
       <div className="main">
         <Editor
           initialDoc={loadDoc(getSessions().currentId)}
+          initialMarks={loadMarks(getSessions().currentId)}
           extensions={[autosaveExtension]}
           onViewReady={(v) => (viewRef.current = v)}
         />

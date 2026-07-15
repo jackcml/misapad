@@ -8,6 +8,14 @@ export interface SessionsIndex {
 
 const INDEX_KEY = "misapad.sessions";
 const docKey = (id: string) => `misapad.doc.${id}`;
+const marksKey = (id: string) => `misapad.marks.${id}`;
+
+/** What autosave captures: the doc plus the generated-text tint layout.
+ * Both are written in the same synchronous flush so they can't drift. */
+export interface DocSnapshot {
+  text: string;
+  marks: Array<[number, number]>;
+}
 
 const storage = typeof localStorage !== "undefined" ? localStorage : null;
 
@@ -54,30 +62,42 @@ export function loadDoc(id: string): string {
   return storage?.getItem(docKey(id)) ?? "";
 }
 
-function saveDoc(id: string, text: string) {
+export function loadMarks(id: string): Array<[number, number]> {
   try {
-    storage?.setItem(docKey(id), text);
+    const raw = storage?.getItem(marksKey(id));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSnapshot(id: string, snap: DocSnapshot) {
+  try {
+    storage?.setItem(docKey(id), snap.text);
+    storage?.setItem(marksKey(id), JSON.stringify(snap.marks));
   } catch {
     // ignore quota errors
   }
 }
 
 // --- debounced autosave -----------------------------------------------------
-// The pending save captures a text getter, so the flush always writes the
-// latest doc and always under the session that scheduled it.
+// The pending save captures a snapshot getter, so the flush always writes the
+// latest doc+marks and always under the session that scheduled it.
 
-let pending: { timer: ReturnType<typeof setTimeout>; id: string; getText: () => string } | null = null;
+let pending: { timer: ReturnType<typeof setTimeout>; id: string; get: () => DocSnapshot } | null =
+  null;
 
-export function scheduleAutosave(getText: () => string) {
+export function scheduleAutosave(get: () => DocSnapshot) {
   if (pending) clearTimeout(pending.timer);
   const id = store.get().currentId;
-  pending = { id, getText, timer: setTimeout(flushAutosave, 500) };
+  pending = { id, get, timer: setTimeout(flushAutosave, 500) };
 }
 
 export function flushAutosave() {
   if (!pending) return;
   clearTimeout(pending.timer);
-  saveDoc(pending.id, pending.getText());
+  saveSnapshot(pending.id, pending.get());
   pending = null;
 }
 
@@ -113,6 +133,7 @@ export function deleteSession(id: string) {
   }
   try {
     storage?.removeItem(docKey(id));
+    storage?.removeItem(marksKey(id));
   } catch {
     // ignore
   }

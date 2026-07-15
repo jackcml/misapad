@@ -1,4 +1,4 @@
-import { Annotation, StateEffect, StateField } from "@codemirror/state";
+import { Annotation, EditorState, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import { invertedEffects } from "@codemirror/commands";
 
@@ -122,4 +122,33 @@ const invertMarks = invertedEffects.of((tr) => {
 });
 
 export const generatedMarks: typeof marksField = marksField;
-export const generatedMarksExtension = [marksField, invertMarks];
+
+/** Current tint layout as [from, to] pairs, for persistence. */
+export function serializeGeneratedRanges(state: EditorState): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  state.field(marksField).between(0, state.doc.length, (from, to) => {
+    out.push([from, to]);
+  });
+  return out;
+}
+
+/** The marks extension, optionally seeded with persisted ranges. Ranges are
+ * validated and clamped against the actual doc, so a stale or corrupt
+ * snapshot degrades to less tint rather than a broken editor. */
+export function generatedMarksExtension(initialRanges: Array<[number, number]> = []) {
+  const field = initialRanges.length
+    ? marksField.init((state) => {
+        const len = state.doc.length;
+        const clean = initialRanges
+          .filter((r) => Array.isArray(r) && typeof r[0] === "number" && typeof r[1] === "number")
+          .map(([f, t]): [number, number] => [
+            Math.max(0, Math.min(f, len)),
+            Math.max(0, Math.min(t, len)),
+          ])
+          .filter(([f, t]) => f < t)
+          .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+        return Decoration.set(clean.map(([f, t]) => generatedMark.range(f, t)));
+      })
+    : marksField;
+  return [field, invertMarks];
+}

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { isolateHistory, undo, redo } from "@codemirror/commands";
 import { appendChunk, beginStreamAt, endStream, streamState } from "./stream";
-import { generatedMarks } from "./generatedMarks";
+import { generatedMarks, serializeGeneratedRanges } from "./generatedMarks";
 import { mockView } from "../testing/mockView";
 
 function markedRanges(view: EditorView): Array<[number, number]> {
@@ -116,6 +116,38 @@ describe("streaming machinery", () => {
     expect(markedRanges(view)).toEqual([
       [0, 2],
       [4, 7],
+    ]);
+  });
+
+  it("round-trips tint through serialize + init (persistence)", () => {
+    const view = mockView("She wrote. ");
+    beginStreamAt(view, 11);
+    appendChunk(view, "The model wrote this part");
+    endStream(view);
+    view.dispatch({ changes: { from: 15, insert: "[me]" }, userEvent: "input.type" });
+    const saved = serializeGeneratedRanges(view.state);
+    expect(saved).toEqual([
+      [11, 15],
+      [19, 40],
+    ]);
+    // "Reload": a fresh view seeded with the persisted doc + ranges.
+    const restored = mockView(view.state.doc.toString(), 0, saved);
+    expect(markedRanges(restored)).toEqual(saved);
+    // Restoration is not undoable — history starts clean.
+    undo(restored as any);
+    expect(markedRanges(restored)).toEqual(saved);
+  });
+
+  it("clamps and drops invalid persisted ranges", () => {
+    const view = mockView("short", 0, [
+      [0, 3],
+      [2, 999], // clamped to doc length
+      [4, 4], // empty → dropped
+      ["x", 2] as unknown as [number, number], // garbage → dropped
+    ]);
+    expect(markedRanges(view)).toEqual([
+      [0, 3],
+      [2, 5],
     ]);
   });
 

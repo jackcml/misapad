@@ -116,13 +116,20 @@ await page.click('button[title="Settings"]');
 await page.locator('input[placeholder="(empty for local servers)"]').fill("");
 await page.click('button[title="Settings"]');
 
-// Autosave: reload restores the doc.
+// Autosave: reload restores the doc and its tint.
 const beforeReload = await page.textContent(".cm-content");
+const tintBeforeReload = await page.locator(".cm-generated").allTextContents();
 await page.waitForTimeout(700); // let the debounced autosave fire
 await page.reload();
 await page.waitForSelector(".cm-content", { timeout: 15000 });
 const afterReload = await page.textContent(".cm-content");
 step("doc survives reload (autosave)", afterReload === beforeReload, `len ${beforeReload.length} vs ${afterReload.length}`);
+const tintAfterReload = await page.locator(".cm-generated").allTextContents();
+step(
+  "tint survives reload",
+  tintBeforeReload.length > 0 && tintAfterReload.join("|") === tintBeforeReload.join("|"),
+  `${tintBeforeReload.length} span(s)`,
+);
 
 // Sessions: new session gets an empty doc, switching back restores.
 page.on("dialog", (d) => d.accept("second story"));
@@ -134,6 +141,8 @@ await page.selectOption(".session-picker select", { index: 0 });
 await page.waitForTimeout(200);
 const backDoc = await page.textContent(".cm-content");
 step("switching back restores first doc", backDoc === beforeReload);
+const tintAfterSwitch = await page.locator(".cm-generated").allTextContents();
+step("switching back restores tint", tintAfterSwitch.join("|") === tintBeforeReload.join("|"));
 
 const realErrors = errors.filter(
   (e) => !e.includes("404") && !e.includes("401"), // favicon + deliberate bad-key test
