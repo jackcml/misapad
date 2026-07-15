@@ -41,11 +41,14 @@ const proseTheme = EditorView.theme({
   },
   ".cm-content": {
     maxWidth: "46rem",
-    padding: "2.5rem 1.5rem 40vh",
+    // Keep horizontal padding on .cm-line, not here: drawSelection clips its
+    // multi-line highlight rectangles to the content box minus line padding,
+    // so content-level side padding gets painted over.
+    padding: "2.5rem 0 40vh",
     caretColor: "var(--fg)",
   },
   "&.cm-focused": { outline: "none" },
-  ".cm-line": { padding: "0" },
+  ".cm-line": { padding: "0 1.5rem" },
   ".cm-generated": { background: "var(--tint)", borderRadius: "2px" },
   ".cm-placeholder": { color: "var(--muted)", fontStyle: "italic" },
   ".cm-cursor": { borderLeftColor: "var(--fg)" },
