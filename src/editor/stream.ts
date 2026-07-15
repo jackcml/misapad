@@ -1,6 +1,6 @@
 import { Annotation, StateEffect, StateField, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { addGeneratedRange } from "./generatedMarks";
+import { addGeneratedRange, removeGeneratedRange } from "./generatedMarks";
 
 /** Tags transactions produced by the generation stream itself. */
 export const genStream = Annotation.define<boolean>();
@@ -78,11 +78,15 @@ export function endStream(view: EditorView) {
   const selectionWasInside =
     view.state.selection.main.from >= from && view.state.selection.main.to <= Math.max(from, head);
 
-  // Revert to pre-stream content, outside history. Collapses all per-chunk
-  // decoration ranges too.
+  // Revert to pre-stream content, outside history. Deletion collapses the
+  // per-chunk decoration ranges; the explicit remove clears any mark that
+  // would otherwise map onto the restored original text.
   view.dispatch({
     changes: { from, to: Math.max(from, head), insert: replaced },
-    effects: endEffect.of(null),
+    effects: [
+      endEffect.of(null),
+      ...(replaced.length ? [removeGeneratedRange.of({ from, to: from + replaced.length })] : []),
+    ],
     annotations: [genStream.of(true), Transaction.addToHistory.of(false)],
   });
 

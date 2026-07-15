@@ -4,6 +4,7 @@ import { createStore } from "../state/store";
 import { appendChunk, beginStreamAt, endStream, isStreaming } from "../editor/stream";
 import { streamChatCompletions } from "./client";
 import { buildAskRequest, buildPopupRequest, buildPrefillRequest, RequestFragment } from "./prompts";
+import { trimEcho } from "./echoTrim";
 
 export type GenStatus =
   | { state: "idle" }
@@ -73,7 +74,15 @@ export async function startGeneration(view: EditorView, kind: "continue" | "popu
   statusStore.set({ state: "generating" });
   beginStreamAt(view, from, to);
   try {
-    const stream = streamChatCompletions(settings.baseUrl, settings.apiKey, body, controller.signal);
+    let stream: AsyncIterable<string> = streamChatCompletions(
+      settings.baseUrl,
+      settings.apiKey,
+      body,
+      controller.signal,
+    );
+    if (kind === "popup") {
+      stream = trimEcho(stream, doc.sliceString(Math.max(0, from - 200), from), doc.sliceString(to, to + 200));
+    }
     for await (const chunk of stream) {
       appendChunk(view, chunk);
     }

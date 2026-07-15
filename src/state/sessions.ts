@@ -26,7 +26,15 @@ function loadIndex(): SessionsIndex {
     // fall through to a fresh index
   }
   const id = newId();
-  return { currentId: id, list: { [id]: "untitled" } };
+  const fresh: SessionsIndex = { currentId: id, list: { [id]: "untitled" } };
+  try {
+    // Persist immediately so a reload finds the same session id (autosaved
+    // docs are keyed by it).
+    storage?.setItem(INDEX_KEY, JSON.stringify(fresh));
+  } catch {
+    // ignore
+  }
+  return fresh;
 }
 
 const store = createStore<SessionsIndex>(loadIndex());

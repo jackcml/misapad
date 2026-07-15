@@ -92,6 +92,19 @@ describe("streaming machinery", () => {
     expect(markedRanges(view)).toEqual([]);
   });
 
+  it("clears tint from restored text when undoing a single-chunk rewrite", () => {
+    // Regression: with one big chunk, the mark used to survive the end-of-
+    // stream swap by mapping onto the restored original text.
+    const view = mockView("The quick brown fox");
+    beginStreamAt(view, 4, 9);
+    appendChunk(view, " there was more.");
+    endStream(view);
+    expect(markedRanges(view)).toEqual([[4, 20]]);
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("The quick brown fox");
+    expect(markedRanges(view)).toEqual([]);
+  });
+
   it("undo removes the tint and redo restores it", () => {
     const view = mockView("ab");
     beginStreamAt(view, 2);

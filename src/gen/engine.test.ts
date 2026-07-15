@@ -30,7 +30,7 @@ beforeAll(async () => {
       if (lastBody.model === "forever") {
         send("tick");
         const timer = setInterval(() => send(" tick"), 20);
-        req.on("close", () => clearInterval(timer));
+        res.on("close", () => clearInterval(timer));
       } else {
         send(" there");
         send(" was");
