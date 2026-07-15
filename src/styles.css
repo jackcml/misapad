@@ -87,6 +87,16 @@ body {
   cursor: pointer;
 }
 
+.session-picker {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.session-picker select {
+  max-width: 14ch;
+}
+
 .status.generating {
   color: var(--accent);
 }
