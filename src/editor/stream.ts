@@ -1,9 +1,8 @@
-import { Annotation, StateEffect, StateField, Transaction } from "@codemirror/state";
+import { StateEffect, StateField, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { addGeneratedRange, removeGeneratedRange } from "./generatedMarks";
+import { addGeneratedRange, generatedMarks, genStream, removeGeneratedRange } from "./generatedMarks";
 
-/** Tags transactions produced by the generation stream itself. */
-export const genStream = Annotation.define<boolean>();
+export { genStream };
 
 interface StreamPos {
   /** Start of the generated region (maps through edits). */
@@ -104,15 +103,29 @@ export function endStream(view: EditorView) {
   // moves the DOM caret and can clamp/yank scroll between the dispatches.
   const scroll = typeof view.scrollSnapshot === "function" ? view.scrollSnapshot() : null;
   const { from, head, replaced } = pos;
-  const text = view.state.sliceDoc(from, Math.max(from, head));
+  const end = Math.max(from, head);
+  const text = view.state.sliceDoc(from, end);
   const selectionWasInside =
-    view.state.selection.main.from >= from && view.state.selection.main.to <= Math.max(from, head);
+    view.state.selection.main.from >= from && view.state.selection.main.to <= end;
+
+  // Capture the tint layout before the swap (as offsets into `text`): user
+  // edits made mid-stream have punched untinted holes that the re-insert
+  // below must reproduce instead of tinting the whole block.
+  const pieces: Array<{ from: number; to: number }> = [];
+  view.state.field(generatedMarks).between(from, end, (f, t) => {
+    const pf = Math.max(f, from) - from;
+    const pt = Math.min(t, end) - from;
+    if (pf >= pt) return;
+    const last = pieces[pieces.length - 1];
+    if (last && last.to >= pf) last.to = Math.max(last.to, pt); // coalesce adjacent chunks
+    else pieces.push({ from: pf, to: pt });
+  });
 
   // Revert to pre-stream content, outside history. Deletion collapses the
   // per-chunk decoration ranges; the explicit remove clears any mark that
   // would otherwise map onto the restored original text.
   view.dispatch({
-    changes: { from, to: Math.max(from, head), insert: replaced },
+    changes: { from, to: end, insert: replaced },
     effects: [
       endEffect.of(null),
       ...(replaced.length ? [removeGeneratedRange.of({ from, to: from + replaced.length })] : []),
@@ -125,7 +138,7 @@ export function endStream(view: EditorView) {
   if (text !== "" && text !== replaced) {
     view.dispatch({
       changes: { from, to: from + replaced.length, insert: text },
-      effects: addGeneratedRange.of({ from, to: from + text.length }),
+      effects: pieces.map((p) => addGeneratedRange.of({ from: from + p.from, to: from + p.to })),
       annotations: [genStream.of(true), Transaction.userEvent.of("input.generate")],
       ...(selectionWasInside ? { selection: { anchor: from + text.length } } : {}),
     });

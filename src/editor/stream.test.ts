@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EditorView } from "@codemirror/view";
-import { undo, redo } from "@codemirror/commands";
+import { isolateHistory, undo, redo } from "@codemirror/commands";
 import { appendChunk, beginStreamAt, endStream, streamState } from "./stream";
 import { generatedMarks } from "./generatedMarks";
 import { mockView } from "../testing/mockView";
@@ -72,7 +72,7 @@ describe("streaming machinery", () => {
     expect(view.state.field(streamState)).toBeNull();
   });
 
-  it("preserves user edits made inside the generated text mid-stream", () => {
+  it("preserves user edits made inside the generated text mid-stream, untinted", () => {
     const view = mockView("x");
     beginStreamAt(view, 1);
     appendChunk(view, "abc");
@@ -81,6 +81,53 @@ describe("streaming machinery", () => {
     appendChunk(view, "def");
     endStream(view);
     expect(view.state.doc.toString()).toBe("xaBcdef");
+    // The user-typed "B" is not the model's text: it stays untinted.
+    expect(markedRanges(view)).toEqual([
+      [1, 2],
+      [3, 7],
+    ]);
+  });
+
+  it("typing inside a completed generation splits the tint around the typed text", () => {
+    const view = mockView("");
+    beginStreamAt(view, 0);
+    appendChunk(view, "hello");
+    endStream(view);
+    expect(markedRanges(view)).toEqual([[0, 5]]);
+    // isolateHistory: in the test both dispatches land in the same ms, which
+    // would otherwise join the typing into the generation's undo group.
+    view.dispatch({
+      changes: { from: 2, insert: "XY" },
+      userEvent: "input.type",
+      annotations: isolateHistory.of("before"),
+    });
+    expect(view.state.doc.toString()).toBe("heXYllo");
+    expect(markedRanges(view)).toEqual([
+      [0, 2],
+      [4, 7],
+    ]);
+    // Undo the typing: tint closes back up; redo re-splits.
+    undo(view as any);
+    expect(markedRanges(view)).toEqual([
+      [0, 2],
+      [2, 5],
+    ]);
+    redo(view as any);
+    expect(markedRanges(view)).toEqual([
+      [0, 2],
+      [4, 7],
+    ]);
+  });
+
+  it("does not extend tint when typing at a generation's edges", () => {
+    const view = mockView("ab");
+    beginStreamAt(view, 2);
+    appendChunk(view, "cd");
+    endStream(view);
+    view.dispatch({ changes: { from: 2, insert: "!" }, userEvent: "input.type" }); // before
+    view.dispatch({ changes: { from: 5, insert: "?" }, userEvent: "input.type" }); // after
+    expect(view.state.doc.toString()).toBe("ab!cd?");
+    expect(markedRanges(view)).toEqual([[3, 5]]);
   });
 
   it("drops decorations when generated text is deleted", () => {

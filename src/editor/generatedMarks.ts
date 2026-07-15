@@ -1,6 +1,11 @@
-import { StateEffect, StateField } from "@codemirror/state";
+import { Annotation, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import { invertedEffects } from "@codemirror/commands";
+
+/** Tags transactions produced by the generation stream itself (chunk inserts
+ * and the end-of-stream swap). Lives here rather than stream.ts so the marks
+ * field can consult it without a circular import. */
+export const genStream = Annotation.define<boolean>();
 
 /** Marks ranges of model-generated text so they render with a subtle tint.
  * Positions in the effects refer to the transaction's new document.
@@ -30,6 +35,35 @@ const marksField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(deco, tr) {
     deco = deco.map(tr.changes);
+    // Tint means "the model wrote this": any text inserted by something other
+    // than the stream (typing, paste, IME — and history events, whose tint is
+    // restored by their own stored effects below) punches an untinted hole in
+    // whatever mark it landed inside, splitting the mark around it.
+    if (tr.docChanged && tr.annotation(genStream) !== true) {
+      const holes: Array<{ from: number; to: number }> = [];
+      tr.changes.iterChanges((_fromA, _toA, fromB, toB) => {
+        if (toB > fromB) holes.push({ from: fromB, to: toB });
+      });
+      for (const hole of holes) {
+        const splits: ReturnType<typeof generatedMark.range>[] = [];
+        let touched = false;
+        deco.between(hole.from, hole.to, (f, t) => {
+          if (f < hole.to && t > hole.from) {
+            touched = true;
+            if (f < hole.from) splits.push(generatedMark.range(f, hole.from));
+            if (t > hole.to) splits.push(generatedMark.range(hole.to, t));
+          }
+        });
+        if (touched) {
+          deco = deco.update({
+            filterFrom: hole.from,
+            filterTo: hole.to,
+            filter: (f, t) => !(f < hole.to && t > hole.from),
+            add: splits,
+          });
+        }
+      }
+    }
     const docLen = tr.newDoc.length;
     for (const e of tr.effects) {
       if (e.is(addGeneratedRange)) {
