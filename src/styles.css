@@ -37,3 +37,20 @@ body {
   flex-direction: column;
   height: 100vh;
 }
+
+.editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor .cm-editor {
+  height: 100%;
+}
+
+.dev-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-bg);
+}
