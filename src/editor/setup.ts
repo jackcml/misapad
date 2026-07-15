@@ -1,8 +1,33 @@
 import { EditorView, keymap, placeholder, drawSelection } from "@codemirror/view";
-import { Extension } from "@codemirror/state";
+import { Extension, Prec } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { generatedMarks } from "./generatedMarks";
+import { generatedMarksExtension } from "./generatedMarks";
 import { streamState } from "./stream";
+import { cancelGeneration, startGeneration } from "../gen/engine";
+import { openPopup } from "../ui/popupStore";
+
+const genKeymap = Prec.high(
+  keymap.of([
+    {
+      key: "Mod-Enter",
+      run: (view) => {
+        void startGeneration(view, "continue");
+        return true;
+      },
+    },
+    {
+      key: "Mod-k",
+      run: (view) => {
+        openPopup(view);
+        return true;
+      },
+    },
+    {
+      key: "Escape",
+      run: () => cancelGeneration(),
+    },
+  ]),
+);
 
 const proseTheme = EditorView.theme({
   "&": {
@@ -32,13 +57,14 @@ const proseTheme = EditorView.theme({
 export function baseExtensions(extra: Extension[] = []): Extension[] {
   return [
     EditorView.lineWrapping,
+    genKeymap,
     history(),
     drawSelection(),
     keymap.of([...historyKeymap, ...defaultKeymap]),
     placeholder("Start writing…"),
     proseTheme,
     streamState,
-    generatedMarks,
+    generatedMarksExtension,
     ...extra,
   ];
 }

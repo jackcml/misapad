@@ -1,27 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { EditorState, TransactionSpec } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { history, undo, redo } from "@codemirror/commands";
+import { undo, redo } from "@codemirror/commands";
 import { appendChunk, beginStreamAt, endStream, streamState } from "./stream";
 import { generatedMarks } from "./generatedMarks";
-
-/** Headless stand-in for EditorView: enough surface for the stream helpers
- * and the undo/redo commands, no DOM required. */
-function mockView(doc: string) {
-  let state = EditorState.create({
-    doc,
-    extensions: [history(), streamState, generatedMarks],
-  });
-  const view = {
-    get state() {
-      return state;
-    },
-    dispatch(...specs: TransactionSpec[]) {
-      state = state.update(...specs).state;
-    },
-  };
-  return view as unknown as EditorView;
-}
+import { mockView } from "../testing/mockView";
 
 function markedRanges(view: EditorView): Array<[number, number]> {
   const out: Array<[number, number]> = [];
@@ -108,5 +90,18 @@ describe("streaming machinery", () => {
     endStream(view);
     view.dispatch({ changes: { from: 0, to: 5 }, userEvent: "delete" });
     expect(markedRanges(view)).toEqual([]);
+  });
+
+  it("undo removes the tint and redo restores it", () => {
+    const view = mockView("ab");
+    beginStreamAt(view, 2);
+    appendChunk(view, "cd");
+    endStream(view);
+    expect(markedRanges(view)).toEqual([[2, 4]]);
+    undo(view as any);
+    expect(markedRanges(view)).toEqual([]);
+    redo(view as any);
+    expect(view.state.doc.toString()).toBe("abcd");
+    expect(markedRanges(view)).toEqual([[2, 4]]);
   });
 });

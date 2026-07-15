@@ -47,10 +47,131 @@ body {
   height: 100%;
 }
 
-.dev-toolbar {
+.main {
   display: flex;
-  gap: 0.5rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   padding: 0.4rem 0.75rem;
   border-bottom: 1px solid var(--border);
   background: var(--panel-bg);
+  font-size: 13px;
+}
+
+.topbar .brand {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.topbar .spacer {
+  flex: 1;
+}
+
+.topbar .model {
+  color: var(--muted);
+}
+
+.topbar button,
+.topbar select {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.status.generating {
+  color: var(--accent);
+}
+
+.status.error {
+  color: #c33;
+  cursor: pointer;
+  max-width: 40ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings {
+  width: 320px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--panel-bg);
+  padding: 0.75rem 1rem 2rem;
+  font-size: 13px;
+}
+
+.settings h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 1.2rem 0 0.4rem;
+}
+
+.settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.6rem;
+  color: var(--muted);
+}
+
+.settings input,
+.settings select,
+.settings textarea {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.45rem;
+  font: inherit;
+}
+
+.settings textarea {
+  resize: vertical;
+  font-size: 12px;
+}
+
+.settings .hint {
+  color: var(--muted);
+  margin-top: 1.5rem;
+}
+
+.settings kbd {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 0.3em;
+  font-size: 11px;
+}
+
+.popup {
+  position: fixed;
+  z-index: 10;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  padding: 0.35rem;
+}
+
+.popup input {
+  width: 320px;
+  background: var(--bg);
+  color: var(--fg);
+  border: none;
+  outline: none;
+  padding: 0.35rem 0.5rem;
+  font-size: 14px;
+  border-radius: 4px;
 }
