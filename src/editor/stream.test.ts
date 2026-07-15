@@ -105,6 +105,40 @@ describe("streaming machinery", () => {
     expect(markedRanges(view)).toEqual([]);
   });
 
+  it("generates again after undoing a previous generation", () => {
+    // Regression: inverted mark effects were stored in post-generation doc
+    // coordinates, so after an undo shrank the doc, the next generation's
+    // first chunk made history re-map them and throw
+    // "Position N is out of range for changeset of length M".
+    const view = mockView("abc");
+    beginStreamAt(view, 3);
+    appendChunk(view, "12345");
+    endStream(view);
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("abc");
+    beginStreamAt(view, 3);
+    appendChunk(view, "Z");
+    endStream(view);
+    expect(view.state.doc.toString()).toBe("abcZ");
+    expect(markedRanges(view)).toEqual([[3, 4]]);
+  });
+
+  it("survives repeated generate/undo/generate cycles", () => {
+    const view = mockView("seed");
+    for (let i = 0; i < 5; i++) {
+      beginStreamAt(view, view.state.doc.length);
+      appendChunk(view, ` gen${i} part one,`);
+      appendChunk(view, " part two.");
+      endStream(view);
+      undo(view as any);
+    }
+    expect(view.state.doc.toString()).toBe("seed");
+    beginStreamAt(view, 4);
+    appendChunk(view, " final");
+    endStream(view);
+    expect(view.state.doc.toString()).toBe("seed final");
+  });
+
   it("undo removes the tint and redo restores it", () => {
     const view = mockView("ab");
     beginStreamAt(view, 2);

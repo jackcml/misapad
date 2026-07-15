@@ -67,6 +67,19 @@ step("redo (Ctrl+Shift+z) restores it", doc.includes("and so the story continued
 const tintedAfterRedo = await page.locator(".cm-generated").count();
 step("redo restores tint", tintedAfterRedo > 0);
 
+// Regression: generate directly after an undo (no redo in between) — stale
+// history effects used to throw "Position N is out of range for changeset".
+await page.keyboard.press("Control+z");
+await page.keyboard.press("Control+End");
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector(".status.generating", { timeout: 5000 });
+await page.waitForSelector(".status.generating", { state: "detached", timeout: 15000 });
+const errAfterUndoGen = await page.locator(".status.error").count();
+doc = await page.textContent(".cm-content");
+step("generate after undo works", errAfterUndoGen === 0 && doc.includes("and so the story continued"));
+await page.keyboard.press("Control+z"); // back to the plain typed text
+doc = await page.textContent(".cm-content");
+
 // Esc mid-stream cancels and keeps partial text.
 await page.keyboard.press("Control+End");
 await page.keyboard.press("Control+Enter");
