@@ -1,0 +1,39 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fdfdfb;
+  --fg: #1d1d1f;
+  --muted: #7a7a80;
+  --accent: #5661d0;
+  --tint: rgba(96, 110, 220, 0.13);
+  --panel-bg: #f4f4f1;
+  --border: #dcdcd6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #191a1e;
+    --fg: #e6e4de;
+    --muted: #8b8b93;
+    --accent: #8f9af0;
+    --tint: rgba(143, 154, 240, 0.16);
+    --panel-bg: #202127;
+    --border: #33343c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, sans-serif;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
