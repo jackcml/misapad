@@ -5,9 +5,13 @@
 import http from "node:http";
 
 const PORT = 11435;
-const REPLY =
+// REPLY_REPEAT=8 npm run mock → longer canned replies (for scroll testing).
+const REPLY = (
   "and so the story continued, one careful word after another, until the " +
-  "mock server ran out of canned text to send.";
+  "mock server ran out of canned text to send. "
+)
+  .repeat(Number(process.env.REPLY_REPEAT ?? 1))
+  .trimEnd();
 
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");

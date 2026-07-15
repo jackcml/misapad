@@ -54,13 +54,40 @@ export function beginStreamAt(view: EditorView, from: number, to = from) {
   });
 }
 
-/** Insert one streamed chunk at the current head, outside undo history. */
+/** True when `pos` is rendered inside (or within `slack` px below) the
+ * scroller's viewport. The slack keeps follow-mode alive when the streaming
+ * head wraps onto a new line just past the fold between chunks, while a user
+ * who scrolled away leaves it hundreds of pixels behind.
+ * False (never throws) on headless views without layout. */
+function posIsVisible(view: EditorView, pos: number, slack = 0): boolean {
+  try {
+    const coords = view.coordsAtPos(pos);
+    if (!coords) return false;
+    const rect = view.scrollDOM.getBoundingClientRect();
+    return coords.bottom > rect.top && coords.top < rect.bottom + slack;
+  } catch {
+    return false;
+  }
+}
+
+/** Insert one streamed chunk at the current head, outside undo history.
+ * Scroll policy: follow the stream only while its head is on screen — once
+ * the user scrolls away to read, leave their viewport alone. */
 export function appendChunk(view: EditorView, chunk: string) {
   const pos = view.state.field(streamState);
   if (!pos || !chunk) return;
+  const follow = posIsVisible(view, pos.head, 60);
+  const changes = view.state.changes({ from: pos.head, insert: chunk });
   view.dispatch({
-    changes: { from: pos.head, insert: chunk },
-    effects: addGeneratedRange.of({ from: pos.head, to: pos.head + chunk.length }),
+    changes,
+    // Keep the selection from riding the insertion point: a caret pinned to
+    // the head makes the browser's caret-sync yank the viewport to it on
+    // every chunk, even after the user scrolled away.
+    selection: view.state.selection.map(changes, -1),
+    effects: [
+      addGeneratedRange.of({ from: pos.head, to: pos.head + chunk.length }),
+      ...(follow ? [EditorView.scrollIntoView(pos.head + chunk.length, { y: "nearest" })] : []),
+    ],
     annotations: [genStream.of(true), Transaction.addToHistory.of(false)],
   });
 }
@@ -73,6 +100,9 @@ export function appendChunk(view: EditorView, chunk: string) {
 export function endStream(view: EditorView) {
   const pos = view.state.field(streamState);
   if (!pos) return;
+  // Pin the viewport across the swap: the temporary delete/reinsert below
+  // moves the DOM caret and can clamp/yank scroll between the dispatches.
+  const scroll = typeof view.scrollSnapshot === "function" ? view.scrollSnapshot() : null;
   const { from, head, replaced } = pos;
   const text = view.state.sliceDoc(from, Math.max(from, head));
   const selectionWasInside =
@@ -92,12 +122,14 @@ export function endStream(view: EditorView) {
 
   // Nothing generated (or nothing changed): keep the restored original and
   // record no history event.
-  if (text === "" || text === replaced) return;
+  if (text !== "" && text !== replaced) {
+    view.dispatch({
+      changes: { from, to: from + replaced.length, insert: text },
+      effects: addGeneratedRange.of({ from, to: from + text.length }),
+      annotations: [genStream.of(true), Transaction.userEvent.of("input.generate")],
+      ...(selectionWasInside ? { selection: { anchor: from + text.length } } : {}),
+    });
+  }
 
-  view.dispatch({
-    changes: { from, to: from + replaced.length, insert: text },
-    effects: addGeneratedRange.of({ from, to: from + text.length }),
-    annotations: [genStream.of(true), Transaction.userEvent.of("input.generate")],
-    ...(selectionWasInside ? { selection: { anchor: from + text.length } } : {}),
-  });
+  if (scroll) view.dispatch({ effects: scroll });
 }
