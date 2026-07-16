@@ -9,6 +9,7 @@ import SettingsPanel from "./ui/SettingsPanel";
 import InlinePopup from "./ui/InlinePopup";
 import SessionPicker from "./ui/SessionPicker";
 import { flushAutosave, getSessions, loadDoc, loadMarks, scheduleAutosave } from "./state/sessions";
+import { cancelGeneration } from "./gen/engine";
 
 const autosaveExtension = EditorView.updateListener.of((update) => {
   if (update.docChanged) {
@@ -33,6 +34,7 @@ export default function App() {
   const handleSessionChange = useCallback(() => {
     const view = viewRef.current;
     if (!view) return;
+    cancelGeneration();
     const id = getSessions().currentId;
     view.setState(
       EditorState.create({

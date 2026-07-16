@@ -1,5 +1,6 @@
 import { StateEffect, StateField, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { isolateHistory } from "@codemirror/commands";
 import { addGeneratedRange, generatedMarks, genStream, removeGeneratedRange } from "./generatedMarks";
 
 export { genStream };
@@ -12,6 +13,13 @@ interface StreamPos {
   /** Text the stream replaced (selection in rewrite mode; "" otherwise),
    * restored by the history swap so one undo brings it back. */
   replaced: string;
+}
+
+export interface StreamResult {
+  committed: boolean;
+  /** Restored selection range in the pre-generation document. */
+  from: number;
+  replacedLength: number;
 }
 
 const beginEffect = StateEffect.define<{ from: number; replaced: string }>();
@@ -96,9 +104,12 @@ export function appendChunk(view: EditorView, chunk: string) {
  * text is applied as ONE history event, so a single undo removes the whole
  * generation and restores any replaced selection. Both dispatches happen in
  * the same task, so nothing is painted in between. */
-export function endStream(view: EditorView) {
+export function endStream(
+  view: EditorView,
+  commitEffects: (result: StreamResult) => readonly StateEffect<unknown>[] = () => [],
+): StreamResult | null {
   const pos = view.state.field(streamState);
-  if (!pos) return;
+  if (!pos) return null;
   // Pin the viewport across the swap: the temporary delete/reinsert below
   // moves the DOM caret and can clamp/yank scroll between the dispatches.
   const scroll = typeof view.scrollSnapshot === "function" ? view.scrollSnapshot() : null;
@@ -135,14 +146,24 @@ export function endStream(view: EditorView) {
 
   // Nothing generated (or nothing changed): keep the restored original and
   // record no history event.
-  if (text !== "" && text !== replaced) {
+  const committed = text !== "" && text !== replaced;
+  const result = { committed, from, replacedLength: replaced.length };
+  if (committed) {
     view.dispatch({
       changes: { from, to: from + replaced.length, insert: text },
-      effects: pieces.map((p) => addGeneratedRange.of({ from: from + p.from, to: from + p.to })),
-      annotations: [genStream.of(true), Transaction.userEvent.of("input.generate")],
+      effects: [
+        ...pieces.map((p) => addGeneratedRange.of({ from: from + p.from, to: from + p.to })),
+        ...commitEffects(result),
+      ],
+      annotations: [
+        genStream.of(true),
+        Transaction.userEvent.of("input.generate"),
+        isolateHistory.of("after"),
+      ],
       ...(selectionWasInside ? { selection: { anchor: from + text.length } } : {}),
     });
   }
 
   if (scroll) view.dispatch({ effects: scroll });
+  return result;
 }

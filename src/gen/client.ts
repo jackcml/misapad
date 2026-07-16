@@ -27,6 +27,14 @@ export async function* streamChatCompletions(
   if (!res.body) throw new Error("Response has no body");
 
   const reader = res.body.getReader();
+  // Although fetch's signal should abort response-body reads, explicitly
+  // cancel the reader too. Some provider/browser combinations otherwise leave
+  // a pending read alive long enough to make an in-flight reroll look inert.
+  const cancelReader = () => {
+    reader.cancel().catch(() => {});
+  };
+  if (signal.aborted) cancelReader();
+  else signal.addEventListener("abort", cancelReader, { once: true });
   const decoder = new TextDecoder();
   let buf = "";
   try {
@@ -49,6 +57,7 @@ export async function* streamChatCompletions(
       }
     }
   } finally {
+    signal.removeEventListener("abort", cancelReader);
     reader.cancel().catch(() => {});
   }
 }

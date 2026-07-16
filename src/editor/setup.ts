@@ -2,12 +2,20 @@ import { EditorView, keymap, placeholder, drawSelection } from "@codemirror/view
 import { Extension, Prec } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { generatedMarksExtension } from "./generatedMarks";
+import { generationRetryExtension } from "./generationRetry";
 import { streamState } from "./stream";
-import { cancelGeneration, startGeneration } from "../gen/engine";
+import { cancelGeneration, replaceLastGeneration, startGeneration } from "../gen/engine";
 import { openPopup } from "../ui/popupStore";
 
 const genKeymap = Prec.high(
   keymap.of([
+    {
+      key: "Mod-Shift-Enter",
+      run: (view) => {
+        void replaceLastGeneration(view);
+        return true;
+      },
+    },
     {
       key: "Mod-Enter",
       run: (view) => {
@@ -71,6 +79,7 @@ export function baseExtensions(
     proseTheme,
     streamState,
     generatedMarksExtension(initialMarks),
+    generationRetryExtension,
     ...extra,
   ];
 }

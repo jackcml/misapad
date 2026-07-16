@@ -80,6 +80,29 @@ step("generate after undo works", errAfterUndoGen === 0 && doc.includes("and so 
 await page.keyboard.press("Control+z"); // back to the plain typed text
 doc = await page.textContent(".cm-content");
 
+// Ctrl+Shift+Enter mid-stream cancels the partial generation and starts a
+// second request whose output replaces it.
+await page.keyboard.press("Control+End");
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector(".status.generating", { timeout: 5000 });
+await page.waitForTimeout(300);
+const replacementRequest = page.waitForRequest(
+  (req) => req.method() === "POST" && req.url().includes("/chat/completions"),
+  { timeout: 5000 },
+);
+await page.keyboard.press("Control+Shift+Enter");
+await replacementRequest;
+await page.waitForSelector(".status.generating", { state: "detached", timeout: 15000 });
+const afterMidStreamReplace = await page.textContent(".cm-content");
+const continuationCount = afterMidStreamReplace.split("and so the story continued").length - 1;
+step(
+  "Ctrl+Shift+Enter replaces an in-flight generation",
+  continuationCount === 1,
+  `${continuationCount} completed continuation(s)`,
+);
+await page.keyboard.press("Control+z"); // back to the plain typed text
+doc = await page.textContent(".cm-content");
+
 // Esc mid-stream cancels and keeps partial text.
 await page.keyboard.press("Control+End");
 await page.keyboard.press("Control+Enter");

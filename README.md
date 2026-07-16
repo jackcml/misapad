@@ -21,6 +21,7 @@ Documents, settings, and API keys are stored in localStorage.
 | Key | Action |
 | --- | --- |
 | `Ctrl+Enter` | Continue from the cursor (ask or prefill mode, per settings) |
+| `Ctrl+Shift+Enter` | Undo the last generation and generate its replacement |
 | `Ctrl+K` | Inline instruction popup: insert at the cursor or rewrite a selection |
 | `Esc` | Stop a running generation or close popup |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo/redo generations |

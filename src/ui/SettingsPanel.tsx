@@ -119,7 +119,8 @@ export default function SettingsPanel() {
       </label>
 
       <p className="hint">
-        <kbd>Ctrl+Enter</kbd> continue · <kbd>Ctrl+K</kbd> instruct · <kbd>Esc</kbd> stop
+        <kbd>Ctrl+Enter</kbd> continue · <kbd>Ctrl+Shift+Enter</kbd> replace · <kbd>Ctrl+K</kbd>{" "}
+        instruct · <kbd>Esc</kbd> stop
       </p>
     </aside>
   );
