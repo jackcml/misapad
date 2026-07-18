@@ -81,30 +81,145 @@ body {
 }
 
 .editor .cm-panel.cm-search {
-  padding: 0.35rem 2rem 0.35rem 0.75rem;
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  width: 19rem;
+  padding: 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 10px;
   background: var(--panel-bg);
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.16),
+    0 2px 6px rgba(0, 0, 0, 0.08);
   font: 12px/1.4 system-ui, sans-serif;
 }
 
 .editor .cm-panel.cm-search input,
-.editor .cm-panel.cm-search button {
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg);
-  color: var(--fg);
+.editor .cm-panel.cm-search button,
+.editor .cm-panel.cm-search label {
+  margin: 0;
   font: inherit;
 }
 
+.editor .cm-panel.cm-search br {
+  display: none;
+}
+
 .editor .cm-panel.cm-search input {
-  padding: 0.2rem 0.4rem;
+  /* Leave room for the close button overlaid at the top right. */
+  width: calc(100% - 1.7rem);
+  padding: 0.32rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+}
+
+.editor .cm-panel.cm-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--tint);
+}
+
+.editor .cm-panel.cm-search input::placeholder {
+  color: var(--muted);
 }
 
 .editor .cm-panel.cm-search button {
-  padding: 0.15rem 0.45rem;
+  /* Three per row: bases sum to ~93% + gaps, so a pill never fits after
+     the third button and the toggles get their own row. */
+  flex: 1 1 31%;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
   cursor: pointer;
+  transition: background-color 120ms, border-color 120ms;
+}
+
+.editor .cm-panel.cm-search button:hover {
+  background: var(--tint);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.editor .cm-panel.cm-search button[name="close"] {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.editor .cm-panel.cm-search button[name="close"]:hover {
+  background: var(--tint);
+  color: var(--fg);
+}
+
+/* Toggle pills: the checkbox is hidden, the label chip shows the state. */
+.editor .cm-panel.cm-search label {
+  flex: 1 1 31%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 120ms, border-color 120ms, color 120ms;
+}
+
+.editor .cm-panel.cm-search label:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.editor .cm-panel.cm-search label:has(:checked) {
+  background: var(--tint);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--fg);
+}
+
+.editor .cm-panel.cm-search label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.editor .cm-panel.cm-search label:has(input:focus-visible) {
+  box-shadow: 0 0 0 2px var(--tint);
+}
+
+/* Search match highlights, tinted with the app accent instead of the
+   default saturated yellow/cyan. */
+.editor .cm-searchMatch {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 2px;
+}
+
+.editor .cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--accent) 42%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
 .main {
