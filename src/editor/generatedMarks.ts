@@ -16,14 +16,19 @@ export const genStream = Annotation.define<boolean>();
  * frame. When a stored effect's positions exceed the mapping's document
  * length, drop the effect (returning undefined) instead of letting mapPos
  * throw "Position N is out of range for changeset of length M". The cost is
- * only cosmetic: a redo reached after unrelated edits may lose its tint. */
+ * only cosmetic: a redo reached after unrelated edits may lose its tint.
+ * A range that maps to empty means the marked text was deleted — dropping the
+ * effect also drops history events left with nothing else, so no zombie undo
+ * step survives a generation's replacement (see endStream's swap). */
 const mapRange = (
   { from, to }: { from: number; to: number },
   mapping: { length: number; mapPos: (pos: number) => number },
-) =>
-  from > mapping.length || to > mapping.length
-    ? undefined
-    : { from: mapping.mapPos(from), to: mapping.mapPos(to) };
+) => {
+  if (from > mapping.length || to > mapping.length) return undefined;
+  const mf = mapping.mapPos(from);
+  const mt = mapping.mapPos(to);
+  return mf < mt ? { from: mf, to: mt } : undefined;
+};
 
 export const addGeneratedRange = StateEffect.define<{ from: number; to: number }>({ map: mapRange });
 

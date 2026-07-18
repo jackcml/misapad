@@ -184,6 +184,26 @@ describe("streaming machinery", () => {
     expect(markedRanges(view)).toEqual([]);
   });
 
+  it("does not leave a zombie undo after rewriting a generated range", () => {
+    const view = mockView("seed");
+    beginStreamAt(view, 4);
+    appendChunk(view, " old");
+    endStream(view);
+
+    // A normal rewrite deletes the old generated range outside history while
+    // it streams, so CodeMirror absorbs that range's original history change.
+    beginStreamAt(view, 4, 8);
+    appendChunk(view, " new");
+    endStream(view);
+    expect(view.state.doc.toString()).toBe("seed new");
+
+    expect(undo(view as any)).toBe(true);
+    expect(view.state.doc.toString()).toBe("seed old");
+    // The absorbed event must disappear completely, rather than survive as a
+    // degenerate mark effect that consumes a second Ctrl+Z without a change.
+    expect(undo(view as any)).toBe(false);
+  });
+
   it("generates again after undoing a previous generation", () => {
     // Regression: inverted mark effects were stored in post-generation doc
     // coordinates, so after an undo shrank the doc, the next generation's
@@ -200,6 +220,9 @@ describe("streaming machinery", () => {
     endStream(view);
     expect(view.state.doc.toString()).toBe("abcZ");
     expect(markedRanges(view)).toEqual([[3, 4]]);
+    expect(undo(view as any)).toBe(true);
+    expect(view.state.doc.toString()).toBe("abc");
+    expect(undo(view as any)).toBe(false);
   });
 
   it("survives repeated generate/undo/generate cycles", () => {
