@@ -167,6 +167,39 @@ step("switching back restores first doc", backDoc === beforeReload);
 const tintAfterSwitch = await page.locator(".cm-generated").allTextContents();
 step("switching back restores tint", tintAfterSwitch.join("|") === tintBeforeReload.join("|"));
 
+// CodeMirror virtualizes long documents, so browser-native find only sees the
+// rendered viewport. The editor's Ctrl+F panel must search the full state.
+await page.click('button[title="New session"]');
+await page.click(".cm-content");
+const distantNeedle = "DISTANT_SEARCH_NEEDLE";
+const longDoc = Array.from({ length: 600 }, (_, i) => `Line ${i}: ordinary filler text.`).join("\n") +
+  `\n${distantNeedle}`;
+await page.keyboard.insertText(longDoc);
+await page.keyboard.press("Control+Home");
+await page.keyboard.press("Control+f");
+const searchInput = page.locator('.cm-search input[name="search"]');
+await searchInput.pressSequentially(distantNeedle);
+await searchInput.press("Enter");
+await page.screenshot({ path: `${SHOT_DIR}/5-search-panel.png` });
+const selectedMatch = page.locator(".cm-searchMatch-selected");
+await selectedMatch.waitFor({ timeout: 5000 });
+step(
+  "Ctrl+F finds text outside the rendered viewport",
+  (await selectedMatch.textContent()) === distantNeedle,
+);
+await searchInput.press("Control+a");
+await searchInput.pressSequentially("ordinary");
+await page.locator('.cm-search button[name="select"]').click();
+step(
+  "search select all creates every match selection",
+  (await page.locator(".cm-selection-count").textContent()) === "4,800 chars",
+);
+step(
+  "search select all returns focus to the editor",
+  await page.locator(".cm-content").evaluate((element) => document.activeElement === element),
+);
+await page.keyboard.press("Escape");
+
 const realErrors = errors.filter(
   (e) => !e.includes("404") && !e.includes("401"), // favicon + deliberate bad-key test
 );

@@ -1,9 +1,11 @@
 import { EditorView, keymap, placeholder, drawSelection } from "@codemirror/view";
-import { Extension, Prec } from "@codemirror/state";
+import { EditorState, Extension, Prec } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { search, searchKeymap } from "@codemirror/search";
 import { generatedMarksExtension } from "./generatedMarks";
 import { generationRetryExtension } from "./generationRetry";
 import { selectionCountExtension } from "./selectionCount";
+import { searchPanelFocusExtension } from "./searchPanel";
 import { streamState } from "./stream";
 import { cancelGeneration, replaceLastGeneration, startGeneration } from "../gen/engine";
 import { openPopup } from "../ui/popupStore";
@@ -72,16 +74,20 @@ export function baseExtensions(
 ): Extension[] {
   return [
     EditorView.lineWrapping,
+    EditorState.allowMultipleSelections.of(true),
+    EditorState.phrases.of({ all: "select all" }),
     genKeymap,
     history(),
+    search({ top: true }),
     drawSelection(),
-    keymap.of([...historyKeymap, ...defaultKeymap]),
+    keymap.of([...searchKeymap, ...historyKeymap, ...defaultKeymap]),
     placeholder("Start writing…"),
     proseTheme,
     streamState,
     generatedMarksExtension(initialMarks),
     generationRetryExtension,
     selectionCountExtension,
+    searchPanelFocusExtension,
     ...extra,
   ];
 }
