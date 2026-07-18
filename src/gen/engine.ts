@@ -29,7 +29,6 @@ export function dismissError() {
 interface GenerationResult {
   committed: boolean;
   retry: GenerationRetry;
-  replacingGeneration: boolean;
 }
 
 interface GenerationPlan {
@@ -47,6 +46,7 @@ interface GenerationPlan {
 interface ActiveGeneration {
   view: EditorView;
   controller: AbortController;
+  plan: GenerationPlan;
   promise: Promise<GenerationResult>;
 }
 
@@ -88,7 +88,7 @@ export async function replaceLastGeneration(view: EditorView): Promise<boolean> 
       // An initial generation with no token has no retry state yet. Re-run it
       // directly from the selection it restored. A canceled buffered reroll,
       // on the other hand, left the previous option and retry state intact.
-      if (!result.committed && !result.replacingGeneration) {
+      if (!result.committed && !active.plan.replacingGeneration) {
         const plan = createInitialRetryPlan(view, result.retry);
         if (!plan) return false;
         await startPlannedGeneration(view, plan);
@@ -126,7 +126,7 @@ function startPlannedGeneration(view: EditorView, plan: GenerationPlan): Promise
   const promise = run.finally(() => {
     if (activeGeneration?.controller === controller) activeGeneration = null;
   });
-  activeGeneration = { view, controller, promise };
+  activeGeneration = { view, controller, plan, promise };
   return promise.then(() => undefined);
 }
 
@@ -253,15 +253,9 @@ async function runGeneration(
   } finally {
     streamResult = endStream(view, (result) => [
       setGenerationRetry.of(mapRetryToStreamResult(retry, result, true)),
-    ], (result) =>
+    ], () =>
       plan.previousRetry
-        ? [
-            setGenerationRetry.of(
-              plan.replacingGeneration
-                ? mapRetryToStreamResult(plan.previousRetry, result, false)
-                : plan.previousRetry,
-            ),
-          ]
+        ? [setGenerationRetry.of(plan.previousRetry)]
         : [],
     );
   }
@@ -271,7 +265,6 @@ async function runGeneration(
   return {
     committed: streamResult?.committed ?? false,
     retry: mappedRetry,
-    replacingGeneration: plan.replacingGeneration,
   };
 }
 
@@ -315,7 +308,6 @@ async function runBufferedReplacement(
     return {
       committed: false,
       retry: plan.retry,
-      replacingGeneration: true,
     };
   }
 
@@ -338,7 +330,7 @@ async function runBufferedReplacement(
     ],
     ...(selectionWasInside ? { selection: { anchor: plan.from + text.length } } : {}),
   });
-  return { committed: true, retry: nextRetry, replacingGeneration: true };
+  return { committed: true, retry: nextRetry };
 }
 
 function mapRetryToStreamResult(
