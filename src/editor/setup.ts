@@ -3,6 +3,7 @@ import { Extension, Prec } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { generatedMarksExtension } from "./generatedMarks";
 import { generationRetryExtension } from "./generationRetry";
+import { selectionCountExtension } from "./selectionCount";
 import { streamState } from "./stream";
 import { cancelGeneration, replaceLastGeneration, startGeneration } from "../gen/engine";
 import { openPopup } from "../ui/popupStore";
@@ -80,6 +81,7 @@ export function baseExtensions(
     streamState,
     generatedMarksExtension(initialMarks),
     generationRetryExtension,
+    selectionCountExtension,
     ...extra,
   ];
 }
