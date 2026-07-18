@@ -13,6 +13,8 @@ interface StreamPos {
   /** Text the stream replaced (selection in rewrite mode; "" otherwise),
    * restored by the history swap so one undo brings it back. */
   replaced: string;
+  /** Generated-mark layout of the replaced text, as local offsets. */
+  replacedMarks: Array<{ from: number; to: number }>;
 }
 
 export interface StreamResult {
@@ -20,16 +22,28 @@ export interface StreamResult {
   /** Restored selection range in the pre-generation document. */
   from: number;
   replacedLength: number;
+  generatedLength: number;
 }
 
-const beginEffect = StateEffect.define<{ from: number; replaced: string }>();
+const beginEffect = StateEffect.define<{
+  from: number;
+  replaced: string;
+  replacedMarks: Array<{ from: number; to: number }>;
+}>();
 const endEffect = StateEffect.define<null>();
 
 export const streamState = StateField.define<StreamPos | null>({
   create: () => null,
   update(value, tr) {
     for (const e of tr.effects) {
-      if (e.is(beginEffect)) return { from: e.value.from, head: e.value.from, replaced: e.value.replaced };
+      if (e.is(beginEffect)) {
+        return {
+          from: e.value.from,
+          head: e.value.from,
+          replaced: e.value.replaced,
+          replacedMarks: e.value.replacedMarks,
+        };
+      }
       if (e.is(endEffect)) return null;
     }
     if (!value || !tr.docChanged) return value;
@@ -41,6 +55,7 @@ export const streamState = StateField.define<StreamPos | null>({
       from: tr.changes.mapPos(value.from, -1),
       head: tr.changes.mapPos(value.head, isGen ? 1 : -1),
       replaced: value.replaced,
+      replacedMarks: value.replacedMarks,
     };
   },
 });
@@ -54,9 +69,15 @@ export function isStreaming(view: EditorView): boolean {
  * whole replace as a single undoable event. */
 export function beginStreamAt(view: EditorView, from: number, to = from) {
   const replaced = view.state.sliceDoc(from, to);
+  const replacedMarks: Array<{ from: number; to: number }> = [];
+  view.state.field(generatedMarks).between(from, to, (markFrom, markTo) => {
+    const localFrom = Math.max(from, markFrom) - from;
+    const localTo = Math.min(to, markTo) - from;
+    if (localFrom < localTo) replacedMarks.push({ from: localFrom, to: localTo });
+  });
   view.dispatch({
     changes: to > from ? { from, to } : undefined,
-    effects: beginEffect.of({ from, replaced }),
+    effects: beginEffect.of({ from, replaced, replacedMarks }),
     annotations: [genStream.of(true), Transaction.addToHistory.of(false)],
   });
 }
@@ -107,15 +128,23 @@ export function appendChunk(view: EditorView, chunk: string) {
 export function endStream(
   view: EditorView,
   commitEffects: (result: StreamResult) => readonly StateEffect<unknown>[] = () => [],
+  restoreEffects: (result: StreamResult) => readonly StateEffect<unknown>[] = () => [],
 ): StreamResult | null {
   const pos = view.state.field(streamState);
   if (!pos) return null;
   // Pin the viewport across the swap: the temporary delete/reinsert below
   // moves the DOM caret and can clamp/yank scroll between the dispatches.
   const scroll = typeof view.scrollSnapshot === "function" ? view.scrollSnapshot() : null;
-  const { from, head, replaced } = pos;
+  const { from, head, replaced, replacedMarks } = pos;
   const end = Math.max(from, head);
   const text = view.state.sliceDoc(from, end);
+  const committed = text !== "" && text !== replaced;
+  const result = {
+    committed,
+    from,
+    replacedLength: replaced.length,
+    generatedLength: text.length,
+  };
   const selectionWasInside =
     view.state.selection.main.from >= from && view.state.selection.main.to <= end;
 
@@ -140,14 +169,16 @@ export function endStream(
     effects: [
       endEffect.of(null),
       ...(replaced.length ? [removeGeneratedRange.of({ from, to: from + replaced.length })] : []),
+      ...replacedMarks.map((mark) =>
+        addGeneratedRange.of({ from: from + mark.from, to: from + mark.to }),
+      ),
+      ...restoreEffects(result),
     ],
     annotations: [genStream.of(true), Transaction.addToHistory.of(false)],
   });
 
   // Nothing generated (or nothing changed): keep the restored original and
   // record no history event.
-  const committed = text !== "" && text !== replaced;
-  const result = { committed, from, replacedLength: replaced.length };
   if (committed) {
     view.dispatch({
       changes: { from, to: from + replaced.length, insert: text },

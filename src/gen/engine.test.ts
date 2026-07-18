@@ -40,9 +40,15 @@ beforeAll(async () => {
         }, 500);
         res.on("close", () => clearTimeout(timer));
       } else {
-        send(" there");
-        send(" was");
-        send(" more.");
+        const output =
+          lastBody.model === "option-a"
+            ? " option A"
+            : lastBody.model === "option-b"
+              ? " option B"
+              : lastBody.model === "option-c"
+                ? " option C"
+                : " there was more.";
+        for (const chunk of output.split(/(?= )/)) send(chunk);
         res.write("data: [DONE]\n\n");
         res.end();
       }
@@ -67,17 +73,43 @@ describe("engine end-to-end (real HTTP + SSE)", () => {
     expect(view.state.doc.toString()).toBe("Once upon a time");
   });
 
-  it("replaces the last generation from its original cursor", async () => {
-    updateSettings({ model: "ok", mode: "ask" });
+  it("keeps rerolled options in undo/redo history", async () => {
+    updateSettings({ model: "option-a", mode: "ask" });
     const view = mockView("Once upon a time");
     await startGeneration(view, "continue");
+    expect(view.state.doc.toString()).toBe("Once upon a time option A");
 
+    updateSettings({ model: "option-b" });
     expect(await replaceLastGeneration(view)).toBe(true);
-    expect(view.state.doc.toString()).toBe("Once upon a time there was more.");
+    expect(view.state.doc.toString()).toBe("Once upon a time option B");
     expect(lastBody.messages.at(-1)).toEqual({ role: "user", content: "Once upon a time" });
 
+    updateSettings({ model: "option-c" });
+    expect(await replaceLastGeneration(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("Once upon a time option C");
+
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("Once upon a time option B");
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("Once upon a time option A");
     undo(view as any);
     expect(view.state.doc.toString()).toBe("Once upon a time");
+
+    redo(view as any);
+    expect(view.state.doc.toString()).toBe("Once upon a time option A");
+    redo(view as any);
+    expect(view.state.doc.toString()).toBe("Once upon a time option B");
+    redo(view as any);
+    expect(view.state.doc.toString()).toBe("Once upon a time option C");
+
+    undo(view as any);
+    view.dispatch({
+      changes: { from: view.state.doc.length, insert: " chosen" },
+      userEvent: "input.type",
+    });
+    expect(redo(view as any)).toBe(false);
+    expect(await replaceLastGeneration(view)).toBe(false);
+    expect(view.state.doc.toString()).toBe("Once upon a time option B chosen");
   });
 
   it("does nothing when there is no generation to replace", async () => {
@@ -160,7 +192,28 @@ describe("engine end-to-end (real HTTP + SSE)", () => {
     expect(view.state.doc.toString()).toBe("start: there was more.");
 
     undo(view as any);
+    expect(view.state.doc.toString()).toMatch(/^start:tick/);
+    undo(view as any);
     expect(view.state.doc.toString()).toBe("start:");
+  });
+
+  it("supersedes an in-flight reroll when reroll is pressed again", async () => {
+    updateSettings({ model: "option-a", mode: "ask" });
+    const view = mockView("seed");
+    await startGeneration(view, "continue");
+
+    updateSettings({ model: "forever" });
+    const firstReroll = replaceLastGeneration(view);
+    await new Promise((r) => setTimeout(r, 100));
+
+    updateSettings({ model: "option-c" });
+    const secondReroll = replaceLastGeneration(view);
+    expect(await firstReroll).toBe(false);
+    expect(await secondReroll).toBe(true);
+    expect(view.state.doc.toString()).toBe("seed option C");
+
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("seed option A");
   });
 
   it("overwrites user text entered inside an in-flight generation", async () => {
@@ -232,18 +285,43 @@ describe("engine end-to-end (real HTTP + SSE)", () => {
   });
 
   it("replaces a popup rewrite with the same instruction and selection", async () => {
-    updateSettings({ model: "ok", mode: "ask" });
+    updateSettings({ model: "option-a", mode: "ask" });
     const view = mockView("The quick brown fox");
     view.dispatch({ selection: { anchor: 9, head: 4 } }); // backward-select "quick"
     await startGeneration(view, "popup", { instruction: "make it formal" });
+    expect(view.state.doc.toString()).toBe("The  option A brown fox");
 
+    updateSettings({ model: "option-b" });
     expect(await replaceLastGeneration(view)).toBe(true);
-    expect(view.state.doc.toString()).toBe("The  there was more. brown fox");
+    expect(view.state.doc.toString()).toBe("The  option B brown fox");
     expect(lastBody.messages[1].content).toContain("<REWRITE>quick</REWRITE>");
     expect(lastBody.messages[1].content).toContain("Instruction: make it formal");
 
     undo(view as any);
+    expect(view.state.doc.toString()).toBe("The  option A brown fox");
+    undo(view as any);
     expect(view.state.doc.toString()).toBe("The quick brown fox");
+    redo(view as any);
+    expect(view.state.doc.toString()).toBe("The  option A brown fox");
+    redo(view as any);
+    expect(view.state.doc.toString()).toBe("The  option B brown fox");
+  });
+
+  it("locks in the current option when the user edits during a buffered reroll", async () => {
+    updateSettings({ model: "option-a", mode: "ask" });
+    const view = mockView("seed");
+    await startGeneration(view, "continue");
+
+    updateSettings({ model: "delayed" });
+    const replacing = replaceLastGeneration(view);
+    view.dispatch({
+      changes: { from: view.state.doc.length, insert: " mine" },
+      userEvent: "input.type",
+    });
+
+    expect(await replacing).toBe(true);
+    expect(view.state.doc.toString()).toBe("seed option A mine");
+    expect(await replaceLastGeneration(view)).toBe(false);
   });
 
   it("restarts a pre-token popup cancellation with its original rewrite metadata", async () => {

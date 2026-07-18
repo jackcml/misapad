@@ -4,23 +4,23 @@ import { invertedEffects } from "@codemirror/commands";
 export interface GenerationRetry {
   kind: "continue" | "popup";
   instruction?: string;
-  /** Selection to restore after undo, in the pre-generation document. */
+  /** Start of both the original selection and current generated option. */
   from: number;
-  to: number;
+  /** End of the generated option currently present in the document. */
+  outputTo: number;
+  /** Text selected before the first generation (empty for continuation). */
+  originalText: string;
   backward: boolean;
 }
 
 export const setGenerationRetry = StateEffect.define<GenerationRetry | null>({
   map(value, changes) {
     if (!value) return null;
-    // A popup's restored selection may be longer than its generated rewrite,
-    // putting `to` outside this mapping's coordinate frame. Keep the retry
-    // metadata unchanged rather than throwing; it is interpreted after undo.
-    if (value.from > changes.length || value.to > changes.length) return value;
+    if (value.from > changes.length || value.outputTo > changes.length) return value;
     return {
       ...value,
       from: changes.mapPos(value.from, -1),
-      to: changes.mapPos(value.to, 1),
+      outputTo: changes.mapPos(value.outputTo, 1),
     };
   },
 });
@@ -31,8 +31,8 @@ export const generationRetryState = StateField.define<GenerationRetry | null>({
     for (const effect of tr.effects) {
       if (effect.is(setGenerationRetry)) return effect.value;
     }
-    // Once the user changes a completed generation, replacing it via a single
-    // undo is no longer safe. Undo restores this value through invertedEffects.
+    // Once the user changes a completed option, it is no longer eligible for
+    // a direct reroll. Undo restores this value through invertedEffects.
     return tr.docChanged ? null : value;
   },
 });
