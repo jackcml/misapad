@@ -36,6 +36,8 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* Track the real visible height on mobile (collapsing URL bar). */
+  height: 100dvh;
 }
 
 .editor {
@@ -359,4 +361,96 @@ body {
   padding: 0.35rem 0.5rem;
   font-size: 14px;
   border-radius: 4px;
+}
+
+/* Touch variant: full-width strip pinned above the on-screen keyboard. */
+.popup.docked {
+  border-radius: 10px;
+  padding: 0.4rem;
+}
+
+.popup.docked input {
+  width: 100%;
+  /* ≥16px so iOS doesn't zoom the page when the input gains focus. */
+  font-size: 16px;
+}
+
+/* Touch controls for the keyboard-only actions; coarse-pointer devices only. */
+.mobile-bar {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 8;
+  gap: 0.2rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+@media (pointer: coarse) {
+  .mobile-bar {
+    display: flex;
+  }
+}
+
+.mobile-bar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--fg);
+  font-size: 19px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-bar button:active {
+  background: var(--tint);
+}
+
+.mobile-bar button:disabled {
+  color: var(--muted);
+  opacity: 0.45;
+}
+
+.mobile-bar button.primary {
+  background: var(--tint);
+  color: var(--accent);
+}
+
+@media (max-width: 700px) {
+  .main {
+    position: relative;
+  }
+
+  /* Overlay the editor instead of crushing it; the topbar gear still toggles. */
+  .settings {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    border-left: none;
+    z-index: 5;
+    /* Clear the floating mobile bar. */
+    padding-bottom: 5.5rem;
+  }
+
+  /* ≥16px so iOS doesn't zoom the page when a field gains focus. */
+  .settings input,
+  .settings select,
+  .settings textarea {
+    font-size: 16px;
+  }
+
+  .topbar .model {
+    display: none;
+  }
 }

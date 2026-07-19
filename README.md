@@ -26,6 +26,9 @@ Documents, settings, and API keys are stored in localStorage.
 | `Esc` | Stop a running generation or close popup |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo/redo generations |
 
+On touch devices, the same actions live in a floating bar above the keyboard (undo, redo, continue/stop, reroll, instruct).
+Desktop remains the primary/recommended platform.
+
 ## Continue modes
 
 While chat models can't do raw text completion natively, but misapad offers two ways to approximate it:

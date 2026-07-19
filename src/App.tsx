@@ -7,6 +7,7 @@ import { serializeGeneratedRanges } from "./editor/generatedMarks";
 import TopBar from "./ui/TopBar";
 import SettingsPanel from "./ui/SettingsPanel";
 import InlinePopup from "./ui/InlinePopup";
+import MobileBar, { mobileBarStatusExtension, syncMobileBarStatus } from "./ui/MobileBar";
 import SessionPicker from "./ui/SessionPicker";
 import { flushAutosave, getSessions, loadDoc, loadMarks, scheduleAutosave } from "./state/sessions";
 import { cancelGeneration } from "./gen/engine";
@@ -39,10 +40,12 @@ export default function App() {
     view.setState(
       EditorState.create({
         doc: loadDoc(id),
-        extensions: baseExtensions([autosaveExtension], loadMarks(id)),
+        extensions: baseExtensions([autosaveExtension, mobileBarStatusExtension], loadMarks(id)),
       }),
     );
     view.focus();
+    // setState replaces the state without an update, so refresh manually.
+    syncMobileBarStatus(view);
   }, []);
 
   return (
@@ -56,12 +59,16 @@ export default function App() {
         <Editor
           initialDoc={loadDoc(getSessions().currentId)}
           initialMarks={loadMarks(getSessions().currentId)}
-          extensions={[autosaveExtension]}
-          onViewReady={(v) => (viewRef.current = v)}
+          extensions={[autosaveExtension, mobileBarStatusExtension]}
+          onViewReady={(v) => {
+            viewRef.current = v;
+            syncMobileBarStatus(v);
+          }}
         />
         {settingsOpen && <SettingsPanel />}
       </div>
       <InlinePopup />
+      {!settingsOpen && <MobileBar viewRef={viewRef} />}
     </div>
   );
 }
