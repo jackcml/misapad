@@ -1,6 +1,6 @@
 # misapad
 
-A minimal frontend for pair-writing with LLMs, inspired by [Mikupad](https://github.com/lmg-anon/mikupad), but updated for chat-completion models.
+A minimal frontend for pair-writing with LLMs, inspired by [Mikupad](https://github.com/lmg-anon/mikupad), but updated for use with chat-completion models.
 
 A single text buffer holds both your writing and the model's. Write a paragraph, hit `Ctrl+Enter` to have the model continue, edit the result, keep writing, continue again.
 Model-generated text is tinted, marking who's responsible for what. Bad gens are quickly removed with a `Ctrl+Z`.
@@ -31,7 +31,7 @@ Desktop remains the primary/recommended platform.
 
 ## Continue modes
 
-While chat models can't do raw text completion natively, but misapad offers two ways to approximate it:
+While chat models can't do raw text completion natively, misapad offers two ways to approximate it:
 
 - **ask** mode prompts the model to continue your text and output just the completion. Works with every chat model. Quality depends on instruction-following.
 - **prefill** mode sends your document as a partial assistant message the model continues verbatim. Where supported, this is the closest thing to true text completion. Flavors:
