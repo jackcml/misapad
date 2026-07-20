@@ -496,6 +496,10 @@ body {
   .mobile-bar {
     display: flex;
   }
+
+  .cm-selection-count {
+    display: none;
+  }
 }
 
 .mobile-bar button {

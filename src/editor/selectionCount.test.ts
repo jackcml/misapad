@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EditorSelection, EditorState } from "@codemirror/state";
-import { selectedCharacterCount } from "./selectionCount";
+import { generatedMarksExtension } from "./generatedMarks";
+import { characterStats, selectedCharacterCount } from "./selectionCount";
 
 describe("selection character count", () => {
   it("is zero for a caret and counts the active selection", () => {
@@ -25,5 +26,45 @@ describe("selection character count", () => {
     });
 
     expect(selectedCharacterCount(state)).toBe(8);
+  });
+
+  it("reports document characters and generated share without a selection", () => {
+    const state = EditorState.create({
+      doc: "hello world",
+      extensions: [generatedMarksExtension([[6, 11]])],
+    });
+
+    expect(characterStats(state)).toEqual({
+      count: 11,
+      generatedCount: 5,
+      generatedPercentage: 45,
+      isSelection: false,
+    });
+  });
+
+  it("reports selected characters and generated share within the selection", () => {
+    const state = EditorState.create({
+      doc: "hello world",
+      selection: EditorSelection.single(4, 9),
+      extensions: [generatedMarksExtension([[6, 11]])],
+    });
+
+    expect(characterStats(state)).toEqual({
+      count: 5,
+      generatedCount: 3,
+      generatedPercentage: 60,
+      isSelection: true,
+    });
+  });
+
+  it("reports zero generated share for an empty document", () => {
+    const state = EditorState.create({ extensions: [generatedMarksExtension()] });
+
+    expect(characterStats(state)).toEqual({
+      count: 0,
+      generatedCount: 0,
+      generatedPercentage: 0,
+      isSelection: false,
+    });
   });
 });
