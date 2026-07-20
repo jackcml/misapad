@@ -7,6 +7,7 @@ import { generationRetryExtension } from "./generationRetry";
 import { selectionCountExtension } from "./selectionCount";
 import { searchPanelFocusExtension } from "./searchPanel";
 import { streamState } from "./stream";
+import { redoUnlessStreaming, undoUnlessStreaming } from "./history";
 import { cancelGeneration, replaceLastGeneration, startGeneration } from "../gen/engine";
 import { openPopup } from "../ui/popupStore";
 
@@ -37,6 +38,9 @@ const genKeymap = Prec.high(
       key: "Escape",
       run: () => cancelGeneration(),
     },
+    { key: "Mod-z", run: undoUnlessStreaming },
+    { key: "Mod-y", run: redoUnlessStreaming },
+    { key: "Mod-Shift-z", run: redoUnlessStreaming },
   ]),
 );
 

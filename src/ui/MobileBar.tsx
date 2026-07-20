@@ -1,6 +1,7 @@
 import { EditorView } from "@codemirror/view";
-import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
+import { redoDepth, undoDepth } from "@codemirror/commands";
 import { generationRetryState } from "../editor/generationRetry";
+import { redoUnlessStreaming, undoUnlessStreaming } from "../editor/history";
 import { isStreaming } from "../editor/stream";
 import {
   cancelGeneration,
@@ -21,9 +22,10 @@ interface BarStatus {
 const barStatus = createStore<BarStatus>({ canUndo: false, canRedo: false, canReroll: false });
 
 export function syncMobileBarStatus(view: EditorView) {
+  const streaming = isStreaming(view);
   const next: BarStatus = {
-    canUndo: undoDepth(view.state) > 0,
-    canRedo: redoDepth(view.state) > 0,
+    canUndo: !streaming && undoDepth(view.state) > 0,
+    canRedo: !streaming && redoDepth(view.state) > 0,
     canReroll: view.state.field(generationRetryState, false) != null || isStreaming(view),
   };
   const prev = barStatus.get();
@@ -74,10 +76,18 @@ export default function MobileBar({ viewRef }: MobileBarProps) {
       onPointerDown={keepFocus}
       onMouseDown={keepFocus}
     >
-      <button disabled={!canUndo} onClick={withView((v) => undo(v))} aria-label="Undo">
+      <button
+        disabled={!canUndo}
+        onClick={withView(undoUnlessStreaming)}
+        aria-label="Undo"
+      >
         ↩
       </button>
-      <button disabled={!canRedo} onClick={withView((v) => redo(v))} aria-label="Redo">
+      <button
+        disabled={!canRedo}
+        onClick={withView(redoUnlessStreaming)}
+        aria-label="Redo"
+      >
         ↪
       </button>
       {generating ? (
