@@ -184,6 +184,69 @@ describe("streaming machinery", () => {
     expect(markedRanges(view)).toEqual([]);
   });
 
+  it("defers a replace: old text stays until the swap, then one event replaces it", () => {
+    const view = mockView("seed");
+    beginStreamAt(view, 4);
+    appendChunk(view, " old");
+    endStream(view); // event A: "seed" -> "seed old"
+
+    beginStreamAt(view, 4, 8, { deferReplace: true });
+    expect(view.state.doc.toString()).toBe("seed old"); // nothing deleted yet
+    appendChunk(view, " ne");
+    appendChunk(view, "w");
+    expect(view.state.doc.toString()).toBe("seed old new");
+    endStream(view);
+    expect(view.state.doc.toString()).toBe("seed new");
+    expect(markedRanges(view)).toEqual([[4, 8]]);
+
+    // The A <-> B chain: undo walks new -> old -> seed, redo walks back.
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("seed old");
+    expect(markedRanges(view)).toEqual([[4, 8]]);
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("seed");
+    expect(undo(view as any)).toBe(false);
+    redo(view as any);
+    redo(view as any);
+    expect(view.state.doc.toString()).toBe("seed new");
+  });
+
+  it("discards a deferred replace without recording a history event", () => {
+    const view = mockView("seed");
+    beginStreamAt(view, 4);
+    appendChunk(view, " old");
+    endStream(view);
+
+    beginStreamAt(view, 4, 8, { deferReplace: true });
+    appendChunk(view, " par");
+    endStream(view, undefined, undefined, { discard: true });
+    expect(view.state.doc.toString()).toBe("seed old");
+    expect(markedRanges(view)).toEqual([[4, 8]]);
+    expect(view.state.field(streamState)).toBeNull();
+
+    // The abandoned churn must not have mapped the old option's event out of
+    // history: one undo still removes it cleanly, with nothing left behind.
+    expect(undo(view as any)).toBe(true);
+    expect(view.state.doc.toString()).toBe("seed");
+    expect(undo(view as any)).toBe(false);
+  });
+
+  it("maps a deferred replace through upstream edits mid-stream", () => {
+    const view = mockView("seed");
+    beginStreamAt(view, 4);
+    appendChunk(view, " old");
+    endStream(view);
+
+    beginStreamAt(view, 4, 8, { deferReplace: true });
+    appendChunk(view, " ne");
+    view.dispatch({ changes: { from: 0, insert: "X" }, userEvent: "input.type" });
+    appendChunk(view, "w");
+    endStream(view);
+    expect(view.state.doc.toString()).toBe("Xseed new");
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("Xseed old");
+  });
+
   it("does not leave a zombie undo after rewriting a generated range", () => {
     const view = mockView("seed");
     beginStreamAt(view, 4);

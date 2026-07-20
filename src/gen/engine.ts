@@ -1,10 +1,7 @@
-import { Text, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { isolateHistory } from "@codemirror/commands";
 import { getSettings } from "../state/settings";
 import { createStore } from "../state/store";
 import { appendChunk, beginStreamAt, endStream, isStreaming, StreamResult } from "../editor/stream";
-import { addGeneratedRange, genStream } from "../editor/generatedMarks";
 import {
   GenerationRetry,
   generationRetryState,
@@ -39,8 +36,6 @@ interface GenerationPlan {
   to: number;
   before: string;
   after: string;
-  /** Rerolls only commit if the option they started from is still untouched. */
-  sourceDoc: Text | null;
 }
 
 interface ActiveGeneration {
@@ -86,8 +81,8 @@ export async function replaceLastGeneration(view: EditorView): Promise<boolean> 
       if (replacement.canceled) return false;
 
       // An initial generation with no token has no retry state yet. Re-run it
-      // directly from the selection it restored. A canceled buffered reroll,
-      // on the other hand, left the previous option and retry state intact.
+      // directly from the selection it restored. A canceled reroll, on the
+      // other hand, restored the previous option and retry state.
       if (!result.committed && !active.plan.replacingGeneration) {
         const plan = createInitialRetryPlan(view, result.retry);
         if (!plan) return false;
@@ -155,7 +150,6 @@ function createInitialPlan(
     to,
     before: doc.sliceString(0, from),
     after: doc.sliceString(to),
-    sourceDoc: null,
   };
 }
 
@@ -171,7 +165,6 @@ function createInitialRetryPlan(view: EditorView, retry: GenerationRetry): Gener
     to,
     before: view.state.sliceDoc(0, from),
     after: view.state.sliceDoc(to),
-    sourceDoc: null,
   };
 }
 
@@ -187,7 +180,6 @@ function createReplacementPlan(view: EditorView, retry: GenerationRetry): Genera
     to: retry.outputTo,
     before: view.state.sliceDoc(0, retry.from),
     after: view.state.sliceDoc(retry.outputTo),
-    sourceDoc: view.state.doc,
   };
 }
 
@@ -224,12 +216,13 @@ async function runGeneration(
   };
 
   statusStore.set({ state: "generating" });
-  if (plan.replacingGeneration) {
-    return runBufferedReplacement(view, plan, body, controller);
-  }
-
-  beginStreamAt(view, plan.from, plan.to);
+  // Rerolls stream visibly too, in deferred-replace mode: the option being
+  // replaced stays in the doc (hidden) while the new text streams in after it,
+  // and the end-of-stream swap applies the replace as one history event —
+  // preserving the A <-> B <-> C undo chain (see beginStreamAt).
+  beginStreamAt(view, plan.from, plan.to, { deferReplace: plan.replacingGeneration });
   let streamResult: StreamResult | null = null;
+  let completed = false;
   try {
     let stream: AsyncIterable<string> = streamChatCompletions(
       settings.baseUrl,
@@ -243,6 +236,7 @@ async function runGeneration(
     for await (const chunk of stream) {
       appendChunk(view, chunk);
     }
+    completed = !controller.signal.aborted;
     statusStore.set({ state: "idle" });
   } catch (err) {
     if (isAbortError(err)) {
@@ -257,6 +251,9 @@ async function runGeneration(
       plan.previousRetry
         ? [setGenerationRetry.of(plan.previousRetry)]
         : [],
+      // A reroll that didn't run to completion restores the previous option
+      // rather than committing a partial replacement.
+      { discard: plan.replacingGeneration && !completed },
     );
   }
   const mappedRetry = streamResult
@@ -266,71 +263,6 @@ async function runGeneration(
     committed: streamResult?.committed ?? false,
     retry: mappedRetry,
   };
-}
-
-/** Build a reroll without touching the document, then swap it in as one
- * ordinary history event. Streaming replacements through addToHistory:false
- * would map the previous generation out of CodeMirror's history, making the
- * requested A <-> B <-> C undo chain impossible. */
-async function runBufferedReplacement(
-  view: EditorView,
-  plan: GenerationPlan,
-  body: Record<string, unknown>,
-  controller: AbortController,
-): Promise<GenerationResult> {
-  let text = "";
-  let completed = false;
-  try {
-    let stream: AsyncIterable<string> = streamChatCompletions(
-      getSettings().baseUrl,
-      getSettings().apiKey,
-      body,
-      controller.signal,
-    );
-    if (plan.retry.kind === "popup") {
-      stream = trimEcho(stream, plan.before.slice(-200), plan.after.slice(0, 200));
-    }
-    for await (const chunk of stream) text += chunk;
-    completed = !controller.signal.aborted;
-    statusStore.set({ state: "idle" });
-  } catch (err) {
-    if (isAbortError(err)) {
-      statusStore.set({ state: "idle" });
-    } else {
-      statusStore.set({ state: "error", message: err instanceof Error ? err.message : String(err) });
-    }
-  }
-
-  // Typing while the request was pending locks in the current option and
-  // clears its retry metadata. Never apply a response over that newer state.
-  const oldText = plan.sourceDoc?.sliceString(plan.from, plan.to) ?? "";
-  if (!completed || view.state.doc !== plan.sourceDoc || text === "" || text === oldText) {
-    return {
-      committed: false,
-      retry: plan.retry,
-    };
-  }
-
-  const nextRetry: GenerationRetry = {
-    ...plan.retry,
-    outputTo: plan.from + text.length,
-  };
-  const selection = view.state.selection.main;
-  const selectionWasInside = selection.from >= plan.from && selection.to <= plan.to;
-  view.dispatch({
-    changes: { from: plan.from, to: plan.to, insert: text },
-    effects: [
-      addGeneratedRange.of({ from: plan.from, to: plan.from + text.length }),
-      setGenerationRetry.of(nextRetry),
-    ],
-    annotations: [
-      genStream.of(true),
-      Transaction.userEvent.of("input.generate"),
-      isolateHistory.of("full"),
-    ],
-    ...(selectionWasInside ? { selection: { anchor: plan.from + text.length } } : {}),
-  });
-  return { committed: true, retry: nextRetry };
 }
 
 function mapRetryToStreamResult(

@@ -6,6 +6,7 @@ import { mockView } from "../testing/mockView";
 import { updateSettings } from "../state/settings";
 import { cancelGeneration, replaceLastGeneration, startGeneration } from "./engine";
 import { generatedMarks } from "../editor/generatedMarks";
+import { streamState } from "../editor/stream";
 
 /** Tiny in-test SSE server. Routes by the request's `model` field:
  *  "ok"      → streams three chunks then [DONE]
@@ -307,7 +308,7 @@ describe("engine end-to-end (real HTTP + SSE)", () => {
     expect(view.state.doc.toString()).toBe("The  option B brown fox");
   });
 
-  it("locks in the current option when the user edits during a buffered reroll", async () => {
+  it("keeps user edits made while a reroll streams, alongside the new option", async () => {
     updateSettings({ model: "option-a", mode: "ask" });
     const view = mockView("seed");
     await startGeneration(view, "continue");
@@ -320,8 +321,44 @@ describe("engine end-to-end (real HTTP + SSE)", () => {
     });
 
     expect(await replacing).toBe(true);
+    expect(view.state.doc.toString()).toBe("seed late mine");
+    // One undo removes only the replacement, restoring the previous option.
+    undo(view as any);
     expect(view.state.doc.toString()).toBe("seed option A mine");
-    expect(await replaceLastGeneration(view)).toBe(false);
+    redo(view as any);
+    // The edit didn't kill retryability: the new option can be rerolled again.
+    updateSettings({ model: "option-b" });
+    expect(await replaceLastGeneration(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("seed option B mine");
+  });
+
+  it("streams a reroll into the doc, hiding the option it replaces", async () => {
+    updateSettings({ model: "option-a", mode: "ask" });
+    const view = mockView("seed");
+    await startGeneration(view, "continue");
+
+    updateSettings({ model: "forever" });
+    const rerolling = replaceLastGeneration(view);
+    await new Promise((r) => setTimeout(r, 100));
+    // Mid-reroll, the previous option is still in the doc (hidden by a
+    // decoration) with the replacement streaming in right after it.
+    const pos = view.state.field(streamState);
+    expect(pos?.hiddenTo).not.toBeNull();
+    expect(view.state.doc.toString()).toMatch(/^seed option Atick/);
+
+    // Escape abandons the reroll: the partial is dropped, the previous option
+    // and its retry state come back, and no history event is recorded.
+    expect(cancelGeneration()).toBe(true);
+    expect(await rerolling).toBe(false);
+    expect(view.state.doc.toString()).toBe("seed option A");
+    updateSettings({ model: "option-b" });
+    expect(await replaceLastGeneration(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("seed option B");
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("seed option A");
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("seed");
+    expect(undo(view as any)).toBe(false);
   });
 
   it("restarts a pre-token popup cancellation with its original rewrite metadata", async () => {
