@@ -154,12 +154,29 @@ step(
   `${tintBeforeReload.length} span(s)`,
 );
 
-// Sessions: new session gets an empty doc, switching back restores.
-page.on("dialog", (d) => d.accept("second story"));
+// Sessions: all CRUD confirmation stays inside the app. A new session gets an
+// empty doc, and switching back restores the first session.
 await page.click('button[title="New session"]');
+const sessionDialog = page.locator('.session-dialog[role="dialog"]');
+await sessionDialog.waitFor({ timeout: 5000 });
+await sessionDialog.locator("input").fill("second story");
+await sessionDialog.getByRole("button", { name: "Create" }).click();
 await page.waitForTimeout(200);
 const emptyDoc = await page.textContent(".cm-content");
 step("new session starts empty", emptyDoc.trim() === "" || emptyDoc.trim() === "Start writing…", JSON.stringify(emptyDoc.slice(0, 40)));
+step(
+  "new session uses the in-app name",
+  (await page.locator(".session-picker select option:checked").textContent()) === "second story",
+);
+
+await page.click('button[title="Rename session"]');
+await sessionDialog.locator("input").fill("renamed story");
+await sessionDialog.locator("input").press("Enter");
+step(
+  "rename uses the in-app dialog",
+  (await page.locator(".session-picker select option:checked").textContent()) === "renamed story",
+);
+
 await page.selectOption(".session-picker select", { index: 0 });
 await page.waitForTimeout(200);
 const backDoc = await page.textContent(".cm-content");
@@ -167,9 +184,23 @@ step("switching back restores first doc", backDoc === beforeReload);
 const tintAfterSwitch = await page.locator(".cm-generated").allTextContents();
 step("switching back restores tint", tintAfterSwitch.join("|") === tintBeforeReload.join("|"));
 
+await page.selectOption(".session-picker select", { label: "renamed story" });
+await page.click('button[title="Delete session"]');
+step(
+  "delete confirmation names the session",
+  (await sessionDialog.textContent()).includes("renamed story"),
+);
+await sessionDialog.getByRole("button", { name: "Delete" }).click();
+step(
+  "delete uses the in-app confirmation",
+  (await page.locator('.session-picker select option').allTextContents()).includes("renamed story") === false,
+);
+
 // CodeMirror virtualizes long documents, so browser-native find only sees the
 // rendered viewport. The editor's Ctrl+F panel must search the full state.
 await page.click('button[title="New session"]');
+await sessionDialog.locator("input").fill("search story");
+await sessionDialog.locator("input").press("Enter");
 await page.click(".cm-content");
 const distantNeedle = "DISTANT_SEARCH_NEEDLE";
 const longDoc = Array.from({ length: 600 }, (_, i) => `Line ${i}: ordinary filler text.`).join("\n") +
