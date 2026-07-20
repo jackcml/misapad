@@ -37,7 +37,7 @@ While chat models can't do raw text completion natively, misapad offers two ways
 - **prefill** mode sends your document as a partial assistant message the model continues verbatim. Where supported, this is the closest thing to true text completion. Flavors:
   - `prefix: true` on the trailing assistant message: DeepSeek (base URL `https://api.deepseek.com/beta`) and Mistral.
   - `continue_final_message: true`: vLLM, TabbyAPI.
-  - raw trailing assistant message: servers that continue it implicitly.
+  - raw trailing assistant message: OpenRouter and other servers that continue it implicitly.
 
 The `Ctrl+K` popup sends the whole document (budgeted) with an `<INSERT_HERE/>` marker at your cursor, or your selection wrapped in `<REWRITE>` tags, plus your instruction, and strips echoed context from the reply.
 

@@ -45,7 +45,7 @@ export default function SettingsPanel() {
           >
             <option value="prefix-field">prefix: true (DeepSeek beta, Mistral)</option>
             <option value="vllm">continue_final_message (vLLM, TabbyAPI)</option>
-            <option value="raw">raw trailing assistant message</option>
+            <option value="raw">raw trailing assistant message (OpenRouter)</option>
           </select>
         </label>
       )}
