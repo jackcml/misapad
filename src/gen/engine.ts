@@ -140,7 +140,6 @@ function createInitialPlan(
     from,
     outputTo: to,
     originalText: doc.sliceString(from, to),
-    backward: kind === "popup" && selection.anchor > selection.head,
   };
   return {
     retry,

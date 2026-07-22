@@ -10,7 +10,6 @@ export interface GenerationRetry {
   outputTo: number;
   /** Text selected before the first generation (empty for continuation). */
   originalText: string;
-  backward: boolean;
 }
 
 export const setGenerationRetry = StateEffect.define<GenerationRetry | null>({
