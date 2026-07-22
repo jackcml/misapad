@@ -17,7 +17,6 @@ export default function Editor({
   onViewReady,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
 
   useEffect(() => {
     const view = new EditorView({
@@ -27,12 +26,10 @@ export default function Editor({
       }),
       parent: containerRef.current!,
     });
-    viewRef.current = view;
     onViewReady(view);
     view.focus();
     return () => {
       view.destroy();
-      viewRef.current = null;
     };
     // Mount once; doc/extension changes after mount go through the view directly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
