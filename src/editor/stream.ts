@@ -3,8 +3,6 @@ import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import { isolateHistory } from "@codemirror/commands";
 import { addGeneratedRange, generatedMarks, genStream, removeGeneratedRange } from "./generatedMarks";
 
-export { genStream };
-
 interface StreamPos {
   /** Start of the generated region (maps through edits). */
   from: number;
