@@ -231,9 +231,11 @@ step(
 await searchInput.press("Control+a");
 await searchInput.pressSequentially("ordinary");
 await page.locator('.cm-search button[name="select"]').click();
+const selectionCountText = await page.locator(".cm-selection-count").textContent();
 step(
   "search select all creates every match selection",
-  (await page.locator(".cm-selection-count").textContent()) === "4,800 chars",
+  selectionCountText?.split(" · ", 1)[0] === "4,800 chars",
+  selectionCountText ?? "selection count missing",
 );
 step(
   "search select all returns focus to the editor",
