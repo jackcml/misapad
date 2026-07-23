@@ -2,7 +2,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { generatedMarks } from "./generatedMarks";
 
-/** Match the string-length units used by the max-context setting. */
+/** Gets total length of selection ranges. */
 export function selectedCharacterCount(state: EditorState): number {
   return state.selection.ranges.reduce((total, range) => total + range.to - range.from, 0);
 }

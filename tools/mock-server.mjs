@@ -57,8 +57,8 @@ const server = http.createServer((req, res) => {
         clearInterval(timer);
       }
     }, delay);
-    // NB: req 'close' fires once the request body is consumed (Node >= 16);
-    // the response's 'close' is the one that means "client went away".
+
+    // Triggered if client closes connection
     res.on("close", () => clearInterval(timer));
   });
 });

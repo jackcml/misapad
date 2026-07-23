@@ -217,7 +217,7 @@ async function runGeneration(
   statusStore.set({ state: "generating" });
   // Rerolls stream visibly too, in deferred-replace mode: the option being
   // replaced stays in the doc (hidden) while the new text streams in after it,
-  // and the end-of-stream swap applies the replace as one history event —
+  // and the end-of-stream swap applies the replace as one history event,
   // preserving the A <-> B <-> C undo chain (see beginStreamAt).
   beginStreamAt(view, plan.from, plan.to, { deferReplace: plan.replacingGeneration });
   let streamResult: StreamResult | null = null;

@@ -133,7 +133,7 @@ describe("streaming machinery", () => {
     // "Reload": a fresh view seeded with the persisted doc + ranges.
     const restored = mockView(view.state.doc.toString(), 0, saved);
     expect(markedRanges(restored)).toEqual(saved);
-    // Restoration is not undoable — history starts clean.
+    // Restoration is not undoable - history starts clean.
     undo(restored as any);
     expect(markedRanges(restored)).toEqual(saved);
   });

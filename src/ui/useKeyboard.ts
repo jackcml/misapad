@@ -18,7 +18,7 @@ function getVisualBottom(): number {
 }
 
 /** On-screen keyboard state for pinning fixed UI above it.
- * `bottom` is the visual viewport's bottom edge in layout coordinates — the
+ * `bottom` is the visual viewport's bottom edge in layout coordinates - the
  * only anchor that is correct in both keyboard modes (overlay and
  * resizes-content) and immune to the Android gap between window.innerHeight
  * and the visual viewport. `open` is a heuristic: anything shrinking the

@@ -2,7 +2,7 @@ import { createStore } from "./store";
 
 export interface SessionsIndex {
   currentId: string;
-  /** id → display name */
+  /** id -> display name */
   list: Record<string, string>;
 }
 

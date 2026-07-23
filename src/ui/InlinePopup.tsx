@@ -42,6 +42,7 @@ function PopupBox({ popup }: { popup: PopupState }) {
       : { left: "0.5rem", right: "0.5rem", bottom: "calc(0.5rem + env(safe-area-inset-bottom))" }
     : { left: x, top: y };
 
+  // Portal for modal-type render hoist
   return createPortal(
     <div className={docked ? "popup docked" : "popup"} style={style}>
       <input

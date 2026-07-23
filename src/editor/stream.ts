@@ -18,11 +18,15 @@ interface StreamPos {
    * streams in at [hiddenTo, head). Deleting the old text up front would make
    * history map its own event away (addToHistory:false transactions still
    * remap stored events), so the actual replace waits for the end-of-stream
-   * swap. null = plain mode, where beginStreamAt already deleted the range. */
+   * swap.
+   * 
+   * null = plain mode, where (if rewrite) beginStreamAt already deleted the
+   * range, and (if continuation) there was no range to be replaced. */
   hiddenTo: number | null;
 }
 
 export interface StreamResult {
+  /** True if history event was committed (false if discarded, empty response, or "rewritten" without change). */
   committed: boolean;
   /** Restored selection range in the pre-generation document. */
   from: number;
@@ -88,13 +92,13 @@ export function isStreaming(view: EditorView): boolean {
 }
 
 /** Start a stream at `from`; if `to > from`, the range is replaced (rewrite mode).
- * The deletion is kept out of history — the end-of-stream swap records the
+ * The deletion is kept out of history - the end-of-stream swap records the
  * whole replace as a single undoable event.
  *
  * With `deferReplace` (rerolls), the old range is not deleted: it stays in the
  * document, hidden by a decoration, while chunks stream in right after it.
  * That keeps every intermediate transaction a pure insert (later deleted
- * exactly), which history maps losslessly — so the previous option's own undo
+ * exactly), which history maps losslessly - so the previous option's own undo
  * event survives and the end-of-stream swap can chain option A <-> option B. */
 export function beginStreamAt(
   view: EditorView,
@@ -110,12 +114,16 @@ export function beginStreamAt(
     });
     return;
   }
+
+  // Store local mark offsets as to not rely on constant unrelated editor state
   const replacedMarks: Array<{ from: number; to: number }> = [];
   view.state.field(generatedMarks).between(from, to, (markFrom, markTo) => {
     const localFrom = Math.max(from, markFrom) - from;
     const localTo = Math.min(to, markTo) - from;
     if (localFrom < localTo) replacedMarks.push({ from: localFrom, to: localTo });
   });
+
+  // changes = { from, to } replaces that range with an empty string (for rewrite)
   view.dispatch({
     changes: to > from ? { from, to } : undefined,
     effects: beginEffect.of({ from, replaced, replacedMarks, hiddenTo: null }),
@@ -140,7 +148,7 @@ function posIsVisible(view: EditorView, pos: number, slack = 0): boolean {
 }
 
 /** Insert one streamed chunk at the current head, outside undo history.
- * Scroll policy: follow the stream only while its head is on screen — once
+ * Scroll policy: follow the stream only while its head is on screen - once
  * the user scrolls away to read, leave their viewport alone. */
 export function appendChunk(view: EditorView, chunk: string) {
   const pos = view.state.field(streamState);
@@ -149,9 +157,7 @@ export function appendChunk(view: EditorView, chunk: string) {
   const changes = view.state.changes({ from: pos.head, insert: chunk });
   view.dispatch({
     changes,
-    // Keep the selection from riding the insertion point: a caret pinned to
-    // the head makes the browser's caret-sync yank the viewport to it on
-    // every chunk, even after the user scrolled away.
+    // Keep the selection from riding the insertion point
     selection: view.state.selection.map(changes, -1),
     effects: [
       addGeneratedRange.of({ from: pos.head, to: pos.head + chunk.length }),
@@ -167,7 +173,7 @@ export function appendChunk(view: EditorView, chunk: string) {
  * generation and restores any replaced selection. Both dispatches happen in
  * the same task, so nothing is painted in between.
  *
- * `discard` forces the restore path even when text was generated — a reroll
+ * `discard` forces the restore path even when text was generated - a reroll
  * that was aborted or errored keeps the option it was replacing instead of
  * committing a partial replacement. */
 export function endStream(
@@ -178,15 +184,20 @@ export function endStream(
 ): StreamResult | null {
   const pos = view.state.field(streamState);
   if (!pos) return null;
+
   // Pin the viewport across the swap: the temporary delete/reinsert below
   // moves the DOM caret and can clamp/yank scroll between the dispatches.
+  // (type guard to account for headless testing, as in `posIsVisible`)
   const scroll = typeof view.scrollSnapshot === "function" ? view.scrollSnapshot() : null;
+
   const { from, head, replaced, replacedMarks, hiddenTo } = pos;
   const deferred = hiddenTo !== null;
+
   // In deferred mode the old text still sits at [from, hiddenTo) and the
   // streamed text after it; in plain mode the stream starts at `from`.
   const streamedFrom = hiddenTo ?? from;
-  const end = Math.max(streamedFrom, head);
+  const end = head;
+
   const text = view.state.sliceDoc(streamedFrom, end);
   const committed = !opts.discard && text !== "" && text !== replaced;
   const result = {
@@ -199,8 +210,8 @@ export function endStream(
     view.state.selection.main.from >= from && view.state.selection.main.to <= end;
 
   // Capture the tint layout before the swap (as offsets into `text`): user
-  // edits made mid-stream have punched untinted holes that the re-insert
-  // below must reproduce instead of tinting the whole block.
+  // edits made mid-stream may have punched untinted holes that the re-insert
+  // below should reproduce instead of tinting the whole block.
   const pieces: Array<{ from: number; to: number }> = [];
   view.state.field(generatedMarks).between(streamedFrom, end, (f, t) => {
     const pf = Math.max(f, streamedFrom) - streamedFrom;
@@ -216,12 +227,16 @@ export function endStream(
   // ranges; the explicit remove clears any mark that would otherwise map onto
   // the restored original). In deferred mode the old text never left the doc,
   // so only the streamed region is deleted (and the hide decoration lifted).
+  let changes;
+  if (deferred) {
+    changes = end > streamedFrom
+      ? { from: streamedFrom, to: end }
+      : undefined;
+  } else {
+    changes = { from, to: end, insert: replaced } ;
+  }
   view.dispatch({
-    changes: deferred
-      ? end > streamedFrom
-        ? { from: streamedFrom, to: end }
-        : undefined
-      : { from, to: end, insert: replaced },
+    changes,
     effects: [
       endEffect.of(null),
       ...(!deferred && replaced.length

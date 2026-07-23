@@ -17,7 +17,7 @@ export const genStream = Annotation.define<boolean>();
  * length, drop the effect (returning undefined) instead of letting mapPos
  * throw "Position N is out of range for changeset of length M". The cost is
  * only cosmetic: a redo reached after unrelated edits may lose its tint.
- * A range that maps to empty means the marked text was deleted — dropping the
+ * A range that maps to empty means the marked text was deleted - dropping the
  * effect also drops history events left with nothing else, so no zombie undo
  * step survives a generation's replacement (see endStream's swap). */
 const mapRange = (
@@ -41,9 +41,9 @@ const marksField = StateField.define<DecorationSet>({
   update(deco, tr) {
     deco = deco.map(tr.changes);
     // Tint means "the model wrote this": any text inserted by something other
-    // than the stream (typing, paste, IME — and history events, whose tint is
-    // restored by their own stored effects below) punches an untinted hole in
-    // whatever mark it landed inside, splitting the mark around it.
+    // than the stream (typing, paste; and history events, whose tint is
+    // restored by their own stored effects below) splits the mark around it
+    // leaving untinted content in the middle.
     if (tr.docChanged && tr.annotation(genStream) !== true) {
       const holes: Array<{ from: number; to: number }> = [];
       tr.changes.iterChanges((_fromA, _toA, fromB, toB) => {
@@ -95,24 +95,22 @@ const marksField = StateField.define<DecorationSet>({
         });
       }
     }
-    if (tr.docChanged) {
-      deco = deco.update({ filter: (from, to) => from < to });
-    }
     return deco;
   },
   provide: (f) => EditorView.decorations.from(f),
 });
 
-/** Make undo/redo restore/remove tint alongside the text: invert explicit
- * add/remove effects, and re-add any marked ranges a change deleted.
- * The coordinate-frame mismatch inherent in stored history effects is
- * handled by mapRange/clamping above, not here. */
+/** Make undo/redo restore/remove tint alongside the text. Coordinate mismatch
+ * between stored history effects is handled by mapRange/clamping above. */
 const invertMarks = invertedEffects.of((tr) => {
+  // Invert explicit add/remove effects
   const effects: StateEffect<{ from: number; to: number }>[] = [];
   for (const e of tr.effects) {
     if (e.is(addGeneratedRange)) effects.push(removeGeneratedRange.of(e.value));
     else if (e.is(removeGeneratedRange)) effects.push(addGeneratedRange.of(e.value));
   }
+
+  // Re-add marks on deleted text
   const marks = tr.startState.field(marksField, false);
   if (marks) {
     tr.changes.iterChangedRanges((fromA, toA) => {
@@ -144,6 +142,7 @@ export function generatedMarksExtension(initialRanges: Array<[number, number]> =
   const field = initialRanges.length
     ? marksField.init((state) => {
         const len = state.doc.length;
+        // Explicit type check here because initialRanges is parsed from json
         const clean = initialRanges
           .filter((r) => Array.isArray(r) && typeof r[0] === "number" && typeof r[1] === "number")
           .map(([f, t]): [number, number] => [
