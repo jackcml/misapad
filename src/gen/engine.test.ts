@@ -285,6 +285,28 @@ describe("engine end-to-end (real HTTP + SSE)", () => {
     expect(marks).toEqual([]);
   });
 
+  it("keeps an earlier generation whole after a popup rewrite inside it", async () => {
+    updateSettings({ model: "option-a", mode: "ask" });
+    const view = mockView("seed");
+    await startGeneration(view, "continue");
+    expect(view.state.doc.toString()).toBe("seed option A");
+
+    view.dispatch({ selection: { anchor: 5, head: 11 } }); // select "option"
+    updateSettings({ model: "option-b" });
+    await startGeneration(view, "popup", { instruction: "rewrite the middle" });
+    expect(view.state.doc.toString()).toBe("seed  option B A");
+
+    // The rewrite and the original generation remain separate undo events.
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("seed option A");
+    undo(view as any);
+    expect(view.state.doc.toString()).toBe("seed");
+    redo(view as any);
+    expect(view.state.doc.toString()).toBe("seed option A");
+    redo(view as any);
+    expect(view.state.doc.toString()).toBe("seed  option B A");
+  });
+
   it("replaces a popup rewrite with the same instruction and selection", async () => {
     updateSettings({ model: "option-a", mode: "ask" });
     const view = mockView("The quick brown fox");

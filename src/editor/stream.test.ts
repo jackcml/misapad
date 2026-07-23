@@ -267,6 +267,24 @@ describe("streaming machinery", () => {
     expect(undo(view as any)).toBe(false);
   });
 
+  it("keeps the original generation undoable after rewriting part of it", () => {
+    const view = mockView("A");
+    beginStreamAt(view, 1);
+    appendChunk(view, "BCD");
+    endStream(view); // event A: "A" -> "ABCD"
+
+    beginStreamAt(view, 2, 3, { deferReplace: true }); // rewrite "C"
+    appendChunk(view, "X");
+    endStream(view);
+    expect(view.state.doc.toString()).toBe("ABXD");
+
+    // Undo the rewrite first, then the original generation as a whole.
+    expect(undo(view as any)).toBe(true);
+    expect(view.state.doc.toString()).toBe("ABCD");
+    expect(undo(view as any)).toBe(true);
+    expect(view.state.doc.toString()).toBe("A");
+  });
+
   it("generates again after undoing a previous generation", () => {
     // Regression: inverted mark effects were stored in post-generation doc
     // coordinates, so after an undo shrank the doc, the next generation's

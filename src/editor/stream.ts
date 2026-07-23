@@ -13,10 +13,10 @@ interface StreamPos {
   replaced: string;
   /** Generated-mark layout of the replaced text, as local offsets. */
   replacedMarks: Array<{ from: number; to: number }>;
-  /** Deferred-replace mode (rerolls): [from, hiddenTo) still holds the text
-   * being replaced, hidden behind a replace decoration, while the new text
-   * streams in at [hiddenTo, head). Deleting the old text up front would make
-   * history map its own event away (addToHistory:false transactions still
+  /** Deferred-replace mode: [from, hiddenTo) still holds the text being
+   * replaced, hidden behind a replace decoration, while the new text streams
+   * in at [hiddenTo, head). Deleting the old text up front can map some or all
+   * of an earlier history event away (addToHistory:false transactions still
    * remap stored events), so the actual replace waits for the end-of-stream
    * swap.
    * 
@@ -95,11 +95,11 @@ export function isStreaming(view: EditorView): boolean {
  * The deletion is kept out of history - the end-of-stream swap records the
  * whole replace as a single undoable event.
  *
- * With `deferReplace` (rerolls), the old range is not deleted: it stays in the
- * document, hidden by a decoration, while chunks stream in right after it.
- * That keeps every intermediate transaction a pure insert (later deleted
- * exactly), which history maps losslessly - so the previous option's own undo
- * event survives and the end-of-stream swap can chain option A <-> option B. */
+ * With `deferReplace`, the old range is not deleted: it stays in the document,
+ * hidden by a decoration, while chunks stream in right after it. That keeps
+ * every intermediate transaction a pure insert (later deleted exactly), which
+ * history maps losslessly—so the replaced text's earlier undo event survives
+ * and the end-of-stream swap records this replacement as a separate event. */
 export function beginStreamAt(
   view: EditorView,
   from: number,
@@ -266,8 +266,8 @@ export function endStream(
       annotations: [
         genStream.of(true),
         Transaction.userEvent.of("input.generate"),
-        // Rerolls isolate fully: joining with an adjacent user edit would make
-        // one undo swallow both the edit and the replacement.
+        // Deferred replacements isolate fully: joining with the event that
+        // created the replaced text would collapse their two-step undo chain.
         isolateHistory.of(deferred ? "full" : "after"),
       ],
       ...(selectionWasInside ? { selection: { anchor: from + text.length } } : {}),
