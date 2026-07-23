@@ -50,8 +50,18 @@ function PopupBox({ popup }: { popup: PopupState }) {
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") submit();
-          else if (e.key === "Escape") close();
+          if (e.key === "Enter") {
+            // close() returns focus to CodeMirror. Cancel this key first so
+            // the browser doesn't deliver Enter's default text input to the
+            // newly focused editor while the generation is starting.
+            e.preventDefault();
+            e.stopPropagation();
+            submit();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            close();
+          }
         }}
         onBlur={close}
         placeholder={popup.hasSelection ? "Rewrite selection…" : "Insert here…"}

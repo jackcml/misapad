@@ -118,11 +118,21 @@ await page.keyboard.press("Control+k");
 const popupInput = page.locator(".popup input");
 await popupInput.waitFor({ timeout: 5000 });
 await page.screenshot({ path: `${SHOT_DIR}/2-popup.png` });
+const beforePopup = await page.textContent(".cm-content");
+const linesBeforePopup = await page.locator(".cm-line").count();
 await popupInput.fill("describe the weather");
 await popupInput.press("Enter");
 await page.waitForSelector(".status.generating", { timeout: 5000 });
 await page.waitForSelector(".status.generating", { state: "detached", timeout: 15000 });
-step("popup generation completed", true);
+const afterPopup = await page.textContent(".cm-content");
+const linesAfterPopup = await page.locator(".cm-line").count();
+step(
+  "popup generation inserts text without leaking Enter",
+  afterPopup.length > beforePopup.length &&
+    afterPopup.includes("and so the story continued") &&
+    linesAfterPopup === linesBeforePopup,
+  `${beforePopup.length} -> ${afterPopup.length} chars, ${linesBeforePopup} -> ${linesAfterPopup} lines`,
+);
 await page.screenshot({ path: `${SHOT_DIR}/3-after-popup.png` });
 
 // Error surface: bad API key -> visible error toast.
