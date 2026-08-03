@@ -41,6 +41,13 @@ While chat models can't do raw text completion natively, misapad offers two ways
 
 The `Ctrl+K` popup sends the whole document (budgeted) with an `<INSERT_HERE/>` marker at your cursor, or your selection wrapped in `<REWRITE>` tags, plus your instruction, and strips echoed context from the reply.
 
+Ctrl+Enter continuations and Ctrl+K instructions have separate token budgets. The
+Ctrl+K budget includes any reasoning tokens the provider counts as output. Ask
+mode and Ctrl+K also have separate extra-request-body JSON settings for
+provider-specific controls. Presets can populate common OpenAI, OpenRouter, and
+DeepSeek reasoning shapes; the resulting JSON is editable and is merged last
+into the request body. Prefill requests do not receive ask-mode extras.
+
 ## Providers (CORS)
 
 Since calls come straight from the browser, the provider must allow cross-origin requests.

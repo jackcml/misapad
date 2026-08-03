@@ -1,10 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import http from "node:http";
 import { AddressInfo } from "node:net";
 import { redo, undo } from "@codemirror/commands";
 import { mockView } from "../testing/mockView";
-import { updateSettings } from "../state/settings";
-import { cancelGeneration, replaceLastGeneration, startGeneration } from "./engine";
+import { DEFAULT_SETTINGS, updateSettings } from "../state/settings";
+import { cancelGeneration, getGenStatus, replaceLastGeneration, startGeneration } from "./engine";
 import { generatedMarks } from "../editor/generatedMarks";
 import { streamState } from "../editor/stream";
 
@@ -40,6 +40,9 @@ beforeAll(async () => {
           res.end();
         }, 500);
         res.on("close", () => clearTimeout(timer));
+      } else if (lastBody.model === "empty") {
+        res.write("data: [DONE]\n\n");
+        res.end();
       } else {
         const output =
           lastBody.model === "option-a"
@@ -62,6 +65,16 @@ beforeAll(async () => {
 
 afterAll(() => server.close());
 
+beforeEach(() => {
+  updateSettings({
+    mode: "ask",
+    continueMaxTokens: DEFAULT_SETTINGS.continueMaxTokens,
+    popupMaxTokens: DEFAULT_SETTINGS.popupMaxTokens,
+    askExtraBody: "",
+    popupExtraBody: "",
+  });
+});
+
 describe("engine end-to-end (real HTTP + SSE)", () => {
   it("streams an ask-mode continuation into the doc as one undo unit", async () => {
     updateSettings({ model: "ok" });
@@ -72,6 +85,50 @@ describe("engine end-to-end (real HTTP + SSE)", () => {
     expect(lastBody.stream).toBe(true);
     undo(view as any);
     expect(view.state.doc.toString()).toBe("Once upon a time");
+  });
+
+  it("uses separate budgets and extra bodies for ask continuations and Ctrl+K", async () => {
+    updateSettings({
+      model: "ok",
+      continueMaxTokens: 200,
+      popupMaxTokens: 2400,
+      askExtraBody: '{"reasoning_effort":"none"}',
+      popupExtraBody: '{"reasoning":{"effort":"low"}}',
+    });
+
+    await startGeneration(mockView("Continue me"), "continue");
+    expect(lastBody.max_tokens).toBe(200);
+    expect(lastBody.reasoning_effort).toBe("none");
+    expect(lastBody.reasoning).toBeUndefined();
+
+    await startGeneration(mockView("Edit me"), "popup", { instruction: "make it vivid" });
+    expect(lastBody.max_tokens).toBe(2400);
+    expect(lastBody.reasoning).toEqual({ effort: "low" });
+    expect(lastBody.reasoning_effort).toBeUndefined();
+  });
+
+  it("does not start a request when scoped extra-body JSON is invalid", async () => {
+    const previousBody = lastBody;
+    updateSettings({ model: "ok", askExtraBody: "{" });
+    const view = mockView("unchanged");
+
+    await startGeneration(view, "continue");
+
+    expect(lastBody).toBe(previousBody);
+    expect(view.state.doc.toString()).toBe("unchanged");
+  });
+
+  it("reports when a completed request spends its budget without returning text", async () => {
+    updateSettings({ model: "empty" });
+    const view = mockView("unchanged");
+
+    await startGeneration(view, "continue");
+
+    expect(view.state.doc.toString()).toBe("unchanged");
+    expect(getGenStatus()).toEqual({
+      state: "error",
+      message: "No text returned; reasoning may have exhausted the token budget.",
+    });
   });
 
   it("keeps rerolled options in undo/redo history", async () => {

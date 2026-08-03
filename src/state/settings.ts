@@ -8,10 +8,13 @@ export interface Settings {
   apiKey: string;
   model: string;
   temperature: number;
-  maxTokens: number;
+  continueMaxTokens: number;
+  popupMaxTokens: number;
   maxContextChars: number;
   mode: GenMode;
   prefillFlavor: PrefillFlavor;
+  askExtraBody: string;
+  popupExtraBody: string;
   systemPromptAsk: string;
   systemPromptPrefill: string;
   userPromptPrefill: string;
@@ -23,10 +26,13 @@ export const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
   model: "",
   temperature: 0.8,
-  maxTokens: 512,
+  continueMaxTokens: 512,
+  popupMaxTokens: 2048,
   maxContextChars: 24000,
   mode: "ask",
   prefillFlavor: "prefix-field",
+  askExtraBody: "",
+  popupExtraBody: "",
   systemPromptAsk:
     "You are a co-writer. The user will send an unfinished piece of writing. " +
     "Continue it from exactly where it stops. Match the style, tone, tense, and formatting. " +
@@ -49,7 +55,17 @@ function load(): Settings {
     if (typeof localStorage === "undefined") return { ...DEFAULT_SETTINGS };
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw) as Partial<Settings> & { maxTokens?: unknown };
+    // maxTokens was the single budget used by every request. Preserve it as
+    // the continuation budget while giving Ctrl+K its own, roomier default.
+    const { maxTokens: legacyMaxTokens, ...stored } = parsed;
+    const continueMaxTokens =
+      typeof stored.continueMaxTokens === "number"
+        ? stored.continueMaxTokens
+        : typeof legacyMaxTokens === "number"
+          ? legacyMaxTokens
+          : DEFAULT_SETTINGS.continueMaxTokens;
+    return { ...DEFAULT_SETTINGS, ...stored, continueMaxTokens };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

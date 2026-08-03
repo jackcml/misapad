@@ -10,6 +10,7 @@ import {
 import { streamChatCompletions } from "./client";
 import { buildAskRequest, buildPopupRequest, buildPrefillRequest, RequestFragment } from "./prompts";
 import { trimEcho } from "./echoTrim";
+import { parseRequestExtras } from "./requestExtras";
 
 export type GenStatus =
   | { state: "idle" }
@@ -18,6 +19,7 @@ export type GenStatus =
 
 const statusStore = createStore<GenStatus>({ state: "idle" });
 export const useGenStatus = () => statusStore.use();
+export const getGenStatus = () => statusStore.get();
 
 export function dismissError() {
   if (statusStore.get().state === "error") statusStore.set({ state: "idle" });
@@ -191,6 +193,7 @@ async function runGeneration(
   const { retry } = plan;
 
   let fragment: RequestFragment;
+  let requestExtras: Record<string, unknown> = {};
   if (retry.kind === "popup") {
     fragment = buildPopupRequest(
       plan.before,
@@ -199,19 +202,37 @@ async function runGeneration(
       retry.instruction ?? "",
       settings,
     );
+    try {
+      requestExtras = parseRequestExtras(settings.popupExtraBody, "Ctrl+K extra body");
+    } catch (error) {
+      statusStore.set({ state: "error", message: error instanceof Error ? error.message : String(error) });
+      return { committed: false, retry };
+    }
   } else {
     fragment =
       settings.mode === "prefill"
         ? buildPrefillRequest(plan.before, settings)
         : buildAskRequest(plan.before, settings);
+    if (settings.mode === "ask") {
+      try {
+        requestExtras = parseRequestExtras(settings.askExtraBody, "Ask-mode extra body");
+      } catch (error) {
+        statusStore.set({ state: "error", message: error instanceof Error ? error.message : String(error) });
+        return { committed: false, retry };
+      }
+    }
   }
 
   const body: Record<string, unknown> = {
     model: settings.model,
     messages: fragment.messages,
     temperature: settings.temperature,
-    max_tokens: settings.maxTokens,
+    max_tokens:
+      retry.kind === "popup" ? settings.popupMaxTokens : settings.continueMaxTokens,
     ...fragment.extraBody,
+    // Extras deliberately come last so advanced/provider-specific settings
+    // can override a standard field as well as add new ones.
+    ...requestExtras,
   };
 
   statusStore.set({ state: "generating" });
@@ -256,6 +277,12 @@ async function runGeneration(
       // rather than committing a partial replacement.
       { discard: plan.replacingGeneration && !completed },
     );
+  }
+  if (completed && streamResult?.generatedLength === 0) {
+    statusStore.set({
+      state: "error",
+      message: "No text returned; reasoning may have exhausted the token budget.",
+    });
   }
   const mappedRetry = streamResult
     ? mapRetryToStreamResult(retry, streamResult, streamResult.committed)

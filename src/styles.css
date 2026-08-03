@@ -430,6 +430,18 @@ body {
   font-size: 12px;
 }
 
+.settings .request-extras {
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.settings .field-hint {
+  color: var(--muted);
+  margin: -0.25rem 0 0.75rem;
+  font-size: 11px;
+}
+
 .settings .hint {
   color: var(--muted);
   margin-top: 1.5rem;

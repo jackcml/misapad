@@ -61,13 +61,23 @@ export default function SettingsPanel() {
         />
       </label>
       <label>
-        Max tokens
+        Continue max tokens (Ctrl+Enter)
         <input
           type="number"
           step="64"
           min="1"
-          value={s.maxTokens}
-          onChange={(e) => updateSettings({ maxTokens: Number(e.target.value) })}
+          value={s.continueMaxTokens}
+          onChange={(e) => updateSettings({ continueMaxTokens: Number(e.target.value) })}
+        />
+      </label>
+      <label>
+        Ctrl+K token budget (includes reasoning)
+        <input
+          type="number"
+          step="256"
+          min="1"
+          value={s.popupMaxTokens}
+          onChange={(e) => updateSettings({ popupMaxTokens: Number(e.target.value) })}
         />
       </label>
       <label>
@@ -80,6 +90,18 @@ export default function SettingsPanel() {
           onChange={(e) => updateSettings({ maxContextChars: Number(e.target.value) })}
         />
       </label>
+      {s.mode === "ask" && (
+        <RequestExtrasEditor
+          label="Ask-mode continuation"
+          field="askExtraBody"
+          value={s.askExtraBody}
+        />
+      )}
+      <RequestExtrasEditor
+        label="Ctrl+K instruction"
+        field="popupExtraBody"
+        value={s.popupExtraBody}
+      />
 
       <h2>Prompts</h2>
       <label>
@@ -123,5 +145,86 @@ export default function SettingsPanel() {
         instruct · <kbd>Esc</kbd> stop
       </p>
     </aside>
+  );
+}
+
+const EXTRA_BODY_PRESETS = [
+  { id: "default", label: "Provider default (no extras)", body: "" },
+  {
+    id: "openai-off",
+    label: "OpenAI — reasoning off",
+    body: '{\n  "reasoning_effort": "none"\n}',
+  },
+  {
+    id: "openai-low",
+    label: "OpenAI — low reasoning",
+    body: '{\n  "reasoning_effort": "low"\n}',
+  },
+  {
+    id: "openrouter-off",
+    label: "OpenRouter — reasoning off",
+    body: '{\n  "reasoning": {\n    "effort": "none"\n  }\n}',
+  },
+  {
+    id: "openrouter-low",
+    label: "OpenRouter — low reasoning",
+    body: '{\n  "reasoning": {\n    "effort": "low"\n  }\n}',
+  },
+  {
+    id: "deepseek-off",
+    label: "DeepSeek — thinking off",
+    body: '{\n  "thinking": {\n    "type": "disabled"\n  }\n}',
+  },
+  {
+    id: "deepseek-on",
+    label: "DeepSeek — thinking on",
+    body: '{\n  "thinking": {\n    "type": "enabled"\n  }\n}',
+  },
+] as const;
+
+function RequestExtrasEditor({
+  label,
+  field,
+  value,
+}: {
+  label: string;
+  field: "askExtraBody" | "popupExtraBody";
+  value: string;
+}) {
+  const selectedPreset = EXTRA_BODY_PRESETS.find((preset) => preset.body === value)?.id ?? "custom";
+  const setValue = (next: string) => {
+    if (field === "askExtraBody") updateSettings({ askExtraBody: next });
+    else updateSettings({ popupExtraBody: next });
+  };
+
+  return (
+    <div className="request-extras">
+      <label>
+        {label} preset
+        <select
+          value={selectedPreset}
+          onChange={(event) => {
+            const preset = EXTRA_BODY_PRESETS.find(({ id }) => id === event.target.value);
+            if (preset) setValue(preset.body);
+          }}
+        >
+          {selectedPreset === "custom" && <option value="custom">Custom JSON</option>}
+          {EXTRA_BODY_PRESETS.map((preset) => (
+            <option key={preset.id} value={preset.id}>{preset.label}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {label} extra request body (JSON)
+        <textarea
+          rows={4}
+          spellCheck={false}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder="{}"
+        />
+      </label>
+      <p className="field-hint">A preset replaces this JSON; it remains editable afterward.</p>
+    </div>
   );
 }
